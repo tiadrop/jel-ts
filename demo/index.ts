@@ -2,8 +2,8 @@ import { progressBar } from "../examples/progressBar";
 import { toggleButton } from "../examples/toggleButton";
 import { $, definePart, DOMContent } from "../src/base";
 
+// wrap body, for body.append(JelEntity)
 const body = $(document.body);
-
 
 
 
