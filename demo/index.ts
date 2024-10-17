@@ -2,12 +2,12 @@ import { progressBar } from "../examples/progressBar";
 import { toggleButton } from "../examples/toggleButton";
 import { $, definePart, DOMContent } from "../src/base";
 
-// wrap body, for body.append(JelEntity)
+// wrap body, for body.append(JelEntity|Element|string|etc)
 const body = $(document.body);
 
 
 
-// (custom) toggle button
+// toggle button
 
 body.append(
     $.h2("Toggle button"),
@@ -22,7 +22,7 @@ body.append(
 )
 
 
-// custom
+// custom 'part'
 
 const superbutton = definePart<{
     caption: DOMContent,
