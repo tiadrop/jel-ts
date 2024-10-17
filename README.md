@@ -31,12 +31,14 @@ body.append($.form([
 body.append([
     $.h2("Files"),
     $.ul(
-        files.map(file => $.a({
-            content: file.name,
-            attribs: {
-                href: `/files/${file.name}`,
-            }
-        }))
+        files.map(file => $.li(
+            $.a({
+                content: file.name,
+                attribs: {
+                    href: `/files/${file.name}`,
+                }
+            })
+        ))
     )
 ])
 
