@@ -1,0 +1,121 @@
+body {
+    background: #ddd;
+    color: #333;
+    transition: 400ms 90ms all;
+    font-family: sans-serif;
+}
+
+body.dark-mode {
+    background: #272727;
+    color: #e8e8e8;
+}
+
+.red-fg {
+    color: #f33;
+}
+
+.superbutton {
+    position: relative;
+    display: inline-block;
+    width: 9em;
+    height: 9em;
+}
+
+.superbutton button {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 90%;
+    height: 60%;
+    transform: translate(-50%, -80%);
+    border-radius: 50%;
+    background: #c11;
+    border: 1px solid #f99;
+    transition: 100ms all;
+    box-shadow:
+        0 .4em #855,
+        inset .1em .1em #fff5,
+        inset -.25em -.25em #0007
+    ;
+}
+.superbutton button:after {
+    position: absolute;
+    width: 50%;
+    height: 50%;
+    top: 50%;
+    left: 50%;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    content: "";
+    box-shadow:
+        inset -.05em -.05em #fff5,
+        inset .05em .05em #0004
+    ;
+}
+
+.superbutton button:active {
+    transition: none;
+    box-shadow:
+        0 .2em #855,
+        inset .1em .1em #fff5,
+        inset -.25em -.25em #0007
+    ;
+    transform: translate(-50%, -80%) translateY(.2em);
+}
+
+.superbutton label {
+    position: absolute;
+    left: 50%;
+    white-space: nowrap;
+    bottom: .2em;
+    transform: translateX(-50%);
+}
+
+.toggle-button {
+    background: #8883;
+    color: inherit;
+    border: 1px #888 solid;
+    padding: .5em;
+    padding-right: 2em;
+    position: relative;
+    cursor: pointer;
+}
+
+.toggle-button:hover {
+    background: #8885;
+}
+
+.toggle-button:before ,
+.toggle-button:after {
+    position: absolute;
+    transition: 200ms all;
+    right: .5em;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.toggle-button:before {
+    top: 50%;
+    content: "";
+}
+.toggle-button:after {
+    content: "✅";
+    top: 90%;
+    opacity: 0;
+}
+
+.toggle-button-on:before {
+    opacity: 0;
+    top: 10%;
+}
+.toggle-button-on:after {
+    opacity: 1;
+    top: 50%;
+}
+
+.theme-toggle:before {
+    content: "🌞";
+}
+.theme-toggle:after {
+    content: "🌛";
+}

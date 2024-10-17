@@ -1,0 +1,20 @@
+
+.jel-progress {
+    height: 1em;
+    display: inline-block;
+    border: 1px #808080 solid;
+    position: relative;
+    width: 10em;
+    overflow: hidden;
+}
+
+.jel-progress-inner {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    --fill: 0;
+    width: calc(var(--fill) * 100%);
+    background: currentColor;
+    transition: 50ms width ease-out;
+}
