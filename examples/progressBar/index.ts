@@ -1,4 +1,4 @@
-import { $, definePart, DOMContent, ElementClassSpec } from "../../src/base";
+import { $, definePart, DOMContent, ElementClassSpec } from "../../src/index";
 
 export const progressBar = definePart<{
     value: number;

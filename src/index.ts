@@ -3,7 +3,7 @@ export type DOMContent = number | null | string | Element | JelEntity<object, an
 export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>, HTMLElementEventMap>;
 type Classes = string | Record<string, boolean> | Classes[];
 
-type PartFn<Spec, API, EventDataMap> = (spec?: Partial<Spec & CommonOptions<EventDataMap>>) => JelEntity<API, EventDataMap>;
+type JelConstructor<Spec, API, EventDataMap> = (spec?: Partial<Spec & CommonOptions<EventDataMap>>) => JelEntity<API, EventDataMap>;
 
 type CommonOptions<EventDataMap> = {
     on?: Partial<{
@@ -11,7 +11,7 @@ type CommonOptions<EventDataMap> = {
     }>
 }
 
-type JelEntity<API extends {}, EventDataMap> = API & {
+type JelEntity<API, EventDataMap> = API & {
     on<E extends keyof EventDataMap>(eventId: E, handler: (this: JelEntity<API, EventDataMap>, data: EventDataMap[E]) => void): void;
     readonly [componentDataSymbol]: JelComponentData;
 };
@@ -26,7 +26,7 @@ interface ElementDescriptor {
 
 // type of `$`, describing $.TAG(...), $(element) and $("tag#id.class")
 type DomHelper = (
-    (<T extends keyof HTMLElementTagNameMap>(tagName: T, descriptor: ElementDescriptor) => HTMLElementTagNameMap[T])
+    (<T extends keyof HTMLElementTagNameMap>(tagName: T, descriptor: ElementDescriptor) => DomEntity<HTMLElementTagNameMap[T]>)
     & ((selector: string, content?: DOMContent) => DomEntity<any>)
     & (<T extends HTMLElement>(element: T) => DomEntity<T>)
     & {[T in keyof HTMLElementTagNameMap]: (descriptor: ElementDescriptor) => DomEntity<HTMLElementTagNameMap[T]>}
@@ -127,7 +127,7 @@ const componentDataSymbol = Symbol("jelComponentData");
 const elementWrapCache = new WeakMap<HTMLElement, DomEntity<any>>();
 
 type ElementAPI<T extends HTMLElement> = {
-    element: T;
+    readonly element: T;
     content: DOMContent;
     classes: DOMTokenList;
     attribs: {
@@ -140,13 +140,13 @@ type ElementAPI<T extends HTMLElement> = {
     remove(): void;
 }
 
-export function definePart<Spec, API extends object, EventDataMap extends Record<string, any> = {}>(
+export function definePart<Spec, API extends object | void, EventDataMap extends Record<string, any> = {}>(
     defaultOptions: Spec,
     init: (
         spec: Spec,
         append: (content: DOMContent) => void,
         trigger: <K extends keyof EventDataMap>(eventId: K, eventData: EventDataMap[K]) => void,
-    ) => API | void
+    ) => API
 ) {
     return ((partialSpec: Partial<Spec> = {}) => {
         const spec = {
@@ -185,16 +185,20 @@ export function definePart<Spec, API extends object, EventDataMap extends Record
                 value: {
                     dom: content
                 }
+            },
+            on: {
+                value: addEventListener,
             }
         }) : {
             [componentDataSymbol]: {
                 dom: content
-            }
+            },
+            on: addEventListener,
         };
 
         return entity;
 
-    }) as PartFn<Spec, API, EventDataMap>;
+    }) as JelConstructor<Spec, API, EventDataMap>;
 };
 
 const attribsProxy: ProxyHandler<HTMLElement> = {
@@ -274,6 +278,6 @@ function getWrappedElement<T extends HTMLElement>(element: T) {
     return elementWrapCache.get(element) as DomEntity<T>;
 }
 
-function isJelEntity(content: DOMContent): content is JelEntity<object, any> {
+function isJelEntity(content: DOMContent): content is JelEntity<object | void, any> {
     return typeof content == "object" && !!content && componentDataSymbol in content;
 }

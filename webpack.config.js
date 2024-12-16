@@ -16,7 +16,11 @@ const config = {
             {
                 test: /\.ts$/i,
                 loader: 'ts-loader',
+                options: {
+                    configFile: "tsconfig-demo.json"
+                },
                 exclude: ['/node_modules/'],
+                
             },
         ],
     },

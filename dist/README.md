@@ -1,10 +1,9 @@
 # Jel
-## Or, How I Learned To Stop Worrying And Love The DOM
-### TypeScript Edition
+### Or, How I Learned To Stop Worrying And Love The DOM
 
 Jel is a thin layer over the DOM to simplify element structure creation, manipulation and componentisation with 'vanilla' TS.
 
-See [demo/index.ts](demo/index.ts) for example operation. Compare with [resulting page](https://aleta.codes/jel-ts-demo/).
+See [demo/index.ts](https://github.com/tiadrop/jel-ts/blob/main/demo/index.ts) for example operation. Compare with [resulting page](https://aleta.codes/jel-ts-demo/).
 
 ## `$` basic use:
 

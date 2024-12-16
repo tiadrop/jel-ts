@@ -1,0 +1,11 @@
+{
+  "name": "@xtia/jel",
+  "version": "0.1.1",
+  "description": "Lightweight DOM wrapper",
+  "main": "index.js",
+  "keywords": [
+    "dom"
+  ],
+  "author": "Aleta Lovelace",
+  "license": "MIT"
+}

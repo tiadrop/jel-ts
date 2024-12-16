@@ -5,9 +5,7 @@
     "moduleResolution": "NodeNext",
     "module": "NodeNext",
     "target": "es5",
-    "declaration": true,
     "allowJs": true,
-    "strict": true,
     "outDir": "./dist"
   },
   "files": ["src/index.ts"]
