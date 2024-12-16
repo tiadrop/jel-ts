@@ -10,7 +10,7 @@ See [demo/index.ts](https://github.com/tiadrop/jel-ts/blob/main/demo/index.ts) f
 `$.[tagname](details)` produces an element of `<tagname>`. `details` can be content of various types or a descriptor object.
 
 ```ts
-import { $ } from "jel-ts";
+import { $ } from "@xtia/jel";
 
 // wrap body
 const body = $(document.body);

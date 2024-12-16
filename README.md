@@ -1,6 +1,5 @@
 # Jel
-## Or, How I Learned To Stop Worrying And Love The DOM
-### TypeScript Edition
+### Or, How I Learned To Stop Worrying And Love The DOM
 
 Jel is a thin layer over the DOM to simplify element structure creation, manipulation and componentisation with 'vanilla' TS.
 
@@ -11,7 +10,7 @@ See [demo/index.ts](demo/index.ts) for example operation. Compare with [resultin
 `$.[tagname](details)` produces an element of `<tagname>`. `details` can be content of various types or a descriptor object.
 
 ```ts
-import { $ } from "jel-ts";
+import { $ } from "@xtia/jel";
 
 // wrap body
 const body = $(document.body);

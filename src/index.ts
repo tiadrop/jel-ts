@@ -1,7 +1,6 @@
 export type ElementClassSpec = string | Record<string, boolean> | ElementClassSpec[];
 export type DOMContent = number | null | string | Element | JelEntity<object, any> | Text | DOMContent[];
 export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>, HTMLElementEventMap>;
-type Classes = string | Record<string, boolean> | Classes[];
 
 type JelConstructor<Spec, API, EventDataMap> = (spec?: Partial<Spec & CommonOptions<EventDataMap>>) => JelEntity<API, EventDataMap>;
 
@@ -17,16 +16,25 @@ type JelEntity<API, EventDataMap> = API & {
 };
 
 interface ElementDescriptor {
-    classes?: Classes;
+    classes?: ElementClassSpec;
     content?: DOMContent;
     attribs?: Record<string, string | number | boolean>;
     on?: Partial<{[E in keyof HTMLElementEventMap]: (event: HTMLElementEventMap[E]) => void}>;
     style?: Partial<{[key in keyof CSSStyleDeclaration]: string | number}> & Record<string, string | number>;
 }
 
+type HelperSelectorString<T extends string> = T | `${T}${"#"|"."}${any}`;
+
 // type of `$`, describing $.TAG(...), $(element) and $("tag#id.class")
 type DomHelper = (
     (<T extends keyof HTMLElementTagNameMap>(tagName: T, descriptor: ElementDescriptor) => DomEntity<HTMLElementTagNameMap[T]>)
+    & (
+        <T extends keyof HTMLElementTagNameMap>(
+            selector: HelperSelectorString<T>,
+            // ^ still not perfect; infers T from "tag#id" and "tag.class.class" but not "tag#id.class"
+            content?: DOMContent
+        ) => DomEntity<HTMLElementTagNameMap[T]>
+    )
     & ((selector: string, content?: DOMContent) => DomEntity<any>)
     & (<T extends HTMLElement>(element: T) => DomEntity<T>)
     & {[T in keyof HTMLElementTagNameMap]: (descriptor: ElementDescriptor) => DomEntity<HTMLElementTagNameMap[T]>}
@@ -44,7 +52,7 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
 
     const ent = getWrappedElement(document.createElement(tag));
 
-    const applyClasses = (classes: Classes): void => {
+    const applyClasses = (classes: ElementClassSpec): void => {
         if (Array.isArray(classes)) return classes.forEach((c) => applyClasses(c));
         if (typeof classes == "string") {
             (classes as string).trim().split(/\s+/).forEach((c) => ent.classes.add(c));
@@ -191,7 +199,7 @@ export function definePart<Spec, API extends object | void, EventDataMap extends
             }
         }) : {
             [componentDataSymbol]: {
-                dom: content
+                dom: content,
             },
             on: addEventListener,
         };
