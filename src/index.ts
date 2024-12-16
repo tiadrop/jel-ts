@@ -23,19 +23,28 @@ interface ElementDescriptor {
     style?: Partial<{[key in keyof CSSStyleDeclaration]: string | number}> & Record<string, string | number>;
 }
 
-type HelperSelectorString<T extends string> = T | `${T}${"#"|"."}${any}`;
-
 // type of `$`, describing $.TAG(...), $(element) and $("tag#id.class")
 type DomHelper = (
     (<T extends keyof HTMLElementTagNameMap>(tagName: T, descriptor: ElementDescriptor) => DomEntity<HTMLElementTagNameMap[T]>)
     & (
         <T extends keyof HTMLElementTagNameMap>(
-            selector: HelperSelectorString<T>,
-            // ^ still not perfect; infers T from "tag#id" and "tag.class.class" but not "tag#id.class"
+            selector: `${T}#${string}`,
             content?: DOMContent
         ) => DomEntity<HTMLElementTagNameMap[T]>
     )
-    & ((selector: string, content?: DOMContent) => DomEntity<any>)
+    & (
+        <T extends keyof HTMLElementTagNameMap>(
+            selector: `${T}.${string}`,
+            content?: DOMContent
+        ) => DomEntity<HTMLElementTagNameMap[T]>
+    )
+    & (
+        <T extends keyof HTMLElementTagNameMap>(
+            selector: T,
+            content?: DOMContent
+        ) => DomEntity<HTMLElementTagNameMap[T]>
+    )
+    // & ((selector: string, content?: DOMContent) => DomEntity<any>)
     & (<T extends HTMLElement>(element: T) => DomEntity<T>)
     & {[T in keyof HTMLElementTagNameMap]: (descriptor: ElementDescriptor) => DomEntity<HTMLElementTagNameMap[T]>}
     & {[T in keyof HTMLElementTagNameMap]: (content?: DOMContent) => DomEntity<HTMLElementTagNameMap[T]>}
