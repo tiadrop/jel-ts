@@ -1,6 +1,6 @@
 import { progressBar } from "../examples/progressBar";
 import { toggleButton } from "../examples/toggleButton";
-import { $, definePart, DOMContent } from "../src/index"; // from "@xtia/jel"
+import { $, definePart, DOMContent, ElementClassSpec } from "../src/index"; // from "@xtia/jel"
 
 // wrap body
 const body = $(document.body);
@@ -27,6 +27,7 @@ body.append(
 // spec: options to be passed to the component function
 type SuperButtonSpec = {
     caption: DOMContent;
+    classes?: ElementClassSpec;
 }
 
 // api: interface returned by the component function
@@ -37,7 +38,9 @@ type SuperButtonAPI = {
 
 // event map: events your component will emit, and the data associated with each
 type SuperButtonEvents = {
-    click: null;
+    click: {
+        totalClicks: number;
+    };
 }
 
 const superbutton = definePart<
@@ -45,8 +48,12 @@ const superbutton = definePart<
     SuperButtonAPI,
     SuperButtonEvents
 >({
-    caption: [],
+    // provide default values for all optional Spec properties
+    classes: [],
 }, (spec, append, trigger) => {
+    // and an init function, where `spec` represents what might be passed to your
+    // part constructor, `append` adds DOM content to your component and `trigger`
+    // raises an event
 
     let timesClicked = 0;
 
@@ -54,18 +61,21 @@ const superbutton = definePart<
         on: {
             click: () => {
                 timesClicked++;
-                trigger("click", null);
+                trigger("click", { totalClicks: timesClicked });
             },
         }
     });
+
     const label = $.label(spec.caption);
+
     append($.div({
-        classes: "superbutton",
+        classes: ["superbutton", spec.classes],
         content: [
             button,
             label,
         ]
     }));
+
     return {
         get caption(){ return label.content },
         set caption(v){ label.content = v },
@@ -73,10 +83,11 @@ const superbutton = definePart<
     };
 });
 
+// using your new part:
 const mySuperbutton = superbutton({
     caption: "Click ☝️",
     on: {
-        click: () => mySuperbutton.caption = `clicks: ${mySuperbutton.timesClicked}`
+        click: event => mySuperbutton.caption = `clicks: ${event.totalClicks}`
     }
 });
 
