@@ -91,8 +91,6 @@ const mySuperbutton = superbutton({
     }
 });
 
-mySuperbutton.on("click", () => alert("works"))
-
 body.append([
     $.h2("Custom"),
     mySuperbutton,
