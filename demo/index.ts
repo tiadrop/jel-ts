@@ -153,3 +153,5 @@ const icon = definePart<IconSpec>({
 console.log(icon({
     iconCode: "test"
 }));
+
+body.append($.span(0))

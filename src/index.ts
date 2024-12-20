@@ -131,7 +131,7 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
         });
     }
 
-    if (descriptor.content) recursiveAppend(ent.element, descriptor.content);
+    if (descriptor.content !== undefined) recursiveAppend(ent.element, descriptor.content);
 
     if (descriptor.style) {
         Object.entries(descriptor.style).forEach(([prop, val]) => {
