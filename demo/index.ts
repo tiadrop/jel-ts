@@ -102,21 +102,16 @@ body.append([
 const demoProgressPlain = progressBar();
 const demoProgressRed = progressBar({ classes: "red-fg" });
 
-const progressDeltaButton = definePart<{
-    delta: number,
-}, void, {}>({
-    delta: .1
-}, (spec, append, trigger) => {
-    append($.button({
-        content: $.code([`progressBar.value ${spec.delta >= 0 ? "+" : "-"}= ${Math.abs(spec.delta)}`]),
-        on: {
-            click: () => {
-                demoProgressPlain.value += spec.delta;
-                demoProgressRed.value = demoProgressPlain.value;
-            }
+// simple components can be simple functions
+const progressDeltaButton = (delta: number) => $.button({
+    content: $.code([`progressBar.value ${delta >= 0 ? "+" : "-"}= ${Math.abs(delta)}`]),
+    on: {
+        click: () => {
+            demoProgressPlain.value += delta;
+            demoProgressRed.value = demoProgressPlain.value;
         }
-    }));
-})
+    }
+});
 
 body.append([
     $.h2("Progress"),
@@ -127,8 +122,8 @@ body.append([
         demoProgressRed,
     ]),
     $.div([
-        progressDeltaButton({delta: -.05}),
-        progressDeltaButton({delta: .06}),
+        progressDeltaButton(-.05),
+        progressDeltaButton(.06),
     ]),
 ]);
 
@@ -149,9 +144,3 @@ const icon = definePart<IconSpec>({
         }
     }));
 });
-
-console.log(icon({
-    iconCode: "test"
-}));
-
-body.append($.span(0))
