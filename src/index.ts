@@ -21,6 +21,10 @@ type JelEntity<API, EventDataMap> = API & {
     readonly [componentDataSymbol]: JelComponentData;
 };
 
+type Styles = Partial<{
+    [key in keyof CSSStyleDeclaration]: string | number
+}> & Record<`--${string}`, string | number>;
+
 interface ElementDescriptor {
     classes?: ElementClassSpec;
     content?: DOMContent;
@@ -28,9 +32,7 @@ interface ElementDescriptor {
     on?: Partial<{[E in keyof HTMLElementEventMap]: (
         event: HTMLElementEventMap[E]
     ) => void}>;
-    style?: Partial<{
-        [key in keyof CSSStyleDeclaration]: string | number
-    }> & Record<string, string | number>;
+    style?: Styles;
 }
 
 // type of `$`, describing $.TAG(...), $(element) and $("tag#id.class")
@@ -128,13 +130,8 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
             ent.element.setAttribute(k, v === true ? k : v as string);
         });
     }
-    
-    const addContent = (content?: DOMContent): void => {
-        if (Array.isArray(content)) return content.forEach((c) => addContent(c));
-        if (content) ent.append(content as any);
-    };
 
-    if (descriptor.content) addContent(descriptor.content);
+    if (descriptor.content) recursiveAppend(ent.element, descriptor.content);
 
     if (descriptor.style) {
         Object.entries(descriptor.style).forEach(([prop, val]) => {
@@ -206,23 +203,22 @@ const attribsProxy: ProxyHandler<HTMLElement> = {
     }
 };
 
+const recursiveAppend = (parent: HTMLElement, c: DOMContent) => {
+    if (c === null) return;
+    if (Array.isArray(c)) {
+        c.forEach(item => recursiveAppend(parent, item));
+        return;
+    }
+    if (isJelEntity(c)) {
+        recursiveAppend(parent, c[componentDataSymbol].dom);
+        return;
+    }
+    if (typeof c == "number") c = c.toString();
+    parent.append(c);
+};
+
 function getWrappedElement<T extends HTMLElement>(element: T) {
     if (!elementWrapCache.has(element)) {
-
-        const recursiveAppend = (c: DOMContent) => {
-            if (c === null) return;
-            if (Array.isArray(c)) {
-                c.forEach(item => recursiveAppend(item));
-                return;
-            }
-            if (isJelEntity(c)) {
-                recursiveAppend(c[componentDataSymbol].dom);
-                return;
-            }
-            if (typeof c == "number") c = c.toString();
-            element.append(c);
-        };
-
         const domEntity = {
             [componentDataSymbol]: {
                 dom: element,
@@ -237,24 +233,26 @@ function getWrappedElement<T extends HTMLElement>(element: T) {
                 });
             },
             append(...content: DOMContent[]) {
-                recursiveAppend(content);
+                recursiveAppend(element, content);
             },
             remove(){
                 element.remove();
             },
             classes: element.classList,
             qsa(selector: string) {
-                return [].slice.call(element.querySelectorAll(selector)).map((el: HTMLElement) => getWrappedElement(el));
+                return [].slice.call(element.querySelectorAll(selector)).map(
+                    (el: HTMLElement) => getWrappedElement(el)
+                );
             },
             get content() {
                 return [].slice.call(element.children).map((child: Element) => {
-                    if (child instanceof HTMLElement) return getWrappedElement(child as HTMLElement);
+                    if (child instanceof HTMLElement) return getWrappedElement(child);
                     return child;
                 }) as DOMContent;
             },
             set content(v: DOMContent) {
                 element.innerHTML = "";
-                recursiveAppend(v);
+                recursiveAppend(element, v);
             },
             attribs: new Proxy(element, attribsProxy) as unknown as {
                 [key: string]: string | null;
@@ -266,7 +264,7 @@ function getWrappedElement<T extends HTMLElement>(element: T) {
                 element.innerHTML = v;
             },
             style: element.style,
-        } as DomEntity<T>;
+        };
         elementWrapCache.set(element, domEntity);
     }
     return elementWrapCache.get(element) as DomEntity<T>;
@@ -276,9 +274,13 @@ function isJelEntity(content: DOMContent): content is JelEntity<object | void, a
     return typeof content == "object" && !!content && componentDataSymbol in content;
 }
 
+type Reserve<T> = Record<string, any> & Partial<Record<keyof T, never>>;
 
-
-export function definePart<Spec, API extends object | void = void, EventDataMap extends Record<string, any> = {}>(
+export function definePart<
+    Spec extends Reserve<CommonOptions<any>>,
+    API extends Reserve<JelEntity<void, any>> | void = void,
+    EventDataMap extends Record<string, any> = {}
+>(
     defaultOptions: Optionals<Spec>,
     init: (
         spec: Required<Spec>,

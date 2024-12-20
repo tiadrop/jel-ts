@@ -111,7 +111,7 @@ const progressDeltaButton = definePart<{
         content: $.code([`progressBar.value ${spec.delta >= 0 ? "+" : "-"}= ${Math.abs(spec.delta)}`]),
         on: {
             click: () => {
-                demoProgressPlain.value -= spec.delta;
+                demoProgressPlain.value += spec.delta;
                 demoProgressRed.value = demoProgressPlain.value;
             }
         }
@@ -127,7 +127,29 @@ body.append([
         demoProgressRed,
     ]),
     $.div([
-        progressDeltaButton({delta: .06}),
         progressDeltaButton({delta: -.05}),
+        progressDeltaButton({delta: .06}),
     ]),
 ]);
+
+type IconSpec = {
+    iconCode: string;
+    fontFamily?: string;
+  }
+  
+const icon = definePart<IconSpec>({
+    // default props, typed as *props that are optional in IconSpec*
+    fontFamily: "font-awesome"
+    }, (spec, append, trigger) => {
+    // spec is typed as IconSpec-but-nothing-is-optional - optionals are filled by above defaults
+    append($.span({
+        classes: "icon",
+        style: { 
+            "--test": 4
+        }
+    }));
+});
+
+console.log(icon({
+    iconCode: "test"
+}));
