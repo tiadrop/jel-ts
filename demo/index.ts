@@ -1,6 +1,6 @@
 import { progressBar } from "../examples/progressBar";
 import { toggleButton } from "../examples/toggleButton";
-import { $, definePart, DOMContent, ElementClassSpec } from "../src/index"; // from "@xtia/jel"
+import { $, definePart, DOMContent, ElementClassDescriptor } from "../src/index"; // from "@xtia/jel"
 
 // wrap body
 const body = $(document.body);
@@ -27,7 +27,7 @@ body.append(
 // spec: options to be passed to the component function
 type SuperButtonSpec = {
     caption: DOMContent;
-    classes?: ElementClassSpec;
+    classes?: ElementClassDescriptor;
 }
 
 // api: interface returned by the component function
@@ -139,8 +139,8 @@ const icon = definePart<IconSpec>({
     // spec is typed as IconSpec-but-nothing-is-optional - optionals are filled by above defaults
     append($.span({
         classes: "icon",
-        style: { 
-            "--test": 4
+        cssVariables: { 
+            "test": 4
         }
     }));
 });

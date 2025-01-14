@@ -1,9 +1,9 @@
-import { $, definePart, DOMContent, ElementClassSpec } from "../../src/index";
+import { $, definePart, DOMContent, ElementClassDescriptor } from "../../src/index";
 
 export const progressBar = definePart<{
     value: number;
     icon: DOMContent;
-    classes: ElementClassSpec;
+    classes: ElementClassDescriptor;
 }, {
     value: number;
 }, {}>({
@@ -14,8 +14,8 @@ export const progressBar = definePart<{
     let value = spec.value;
     const inner = $.div({
         classes: "jel-progress-inner",
-        style: {
-            "--fill": value,
+        cssVariables: {
+            fill: value,
         }
     });
     append($.div({
@@ -26,7 +26,7 @@ export const progressBar = definePart<{
         get value(){ return value },
         set value(v: number) {
             value = v;
-            inner.style.setProperty("--fill", v as any);
+            inner.setCSSVariable("fill", v as any);
         }
     }
 });

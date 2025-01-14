@@ -1,4 +1,4 @@
-export type ElementClassSpec = string | Record<string, boolean> | ElementClassSpec[];
+export type ElementClassDescriptor = string | Record<string, boolean> | ElementClassDescriptor[];
 export type DOMContent = number | null | string | Element | JelEntity<object, any> | Text | DOMContent[];
 export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>, HTMLElementEventMap>;
 
@@ -21,19 +21,33 @@ type JelEntity<API, EventDataMap> = API & {
     readonly [componentDataSymbol]: JelComponentData;
 };
 
-type Styles = Partial<{
-    [key in keyof CSSStyleDeclaration]: string | number
-}> & Record<`--${string}`, string | number>;
+type StylesDescriptor = Partial<{
+    [key in keyof CSSStyleDeclaration]: CSSValue
+}>;
 
 interface ElementDescriptor {
-    classes?: ElementClassSpec;
+    classes?: ElementClassDescriptor;
     content?: DOMContent;
     attribs?: Record<string, string | number | boolean>;
     on?: Partial<{[E in keyof HTMLElementEventMap]: (
         event: HTMLElementEventMap[E]
     ) => void}>;
-    style?: Styles;
+    style?: StylesDescriptor;
+    cssVariables?: Record<string, CSSValue>;
 }
+
+const elementProxy: ProxyHandler<CSSStyleDeclaration> = {
+    get(style, prop){ 
+        return style[prop as any];
+    },
+    set(style, prop, value) {
+        style[prop as any] = value;
+        return true;
+    },
+    apply(style, _, [styles]: [StylesDescriptor]) {
+        Object.entries(styles).forEach(([prop, val]) => style[prop as any] = val as any);
+    },
+};
 
 // type of `$`, describing $.TAG(...), $(element) and $("tag#id.class")
 type DomHelper = (
@@ -78,6 +92,8 @@ type JelComponentData = {
     dom: DOMContent;
 }
 
+type CSSValue = string | number;
+
 type ElementAPI<T extends HTMLElement> = {
     readonly element: T;
     content: DOMContent;
@@ -85,12 +101,16 @@ type ElementAPI<T extends HTMLElement> = {
     attribs: {
         [key: string]: string | null;
     },
-    style: CSSStyleDeclaration;
+    style: StylesDescriptor & ((styles: StylesDescriptor) => void);
     innerHTML: string;
+    setCSSVariable(table: Record<string, CSSValue>): void;
+    setCSSVariable(variableName: string, value: CSSValue): void;
     qsa(selector: string): DomEntity<any>[];
     append(...content: DOMContent[]): void;
     remove(): void;
-}
+} & (T extends HTMLInputElement ? {
+    value: string;
+} : {});
 
 type OptionalKeys<T> = {
     [K in keyof T]-?: {} extends Pick<T, K> ? K : never
@@ -107,7 +127,7 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
 
     const ent = getWrappedElement(document.createElement(tag));
 
-    const applyClasses = (classes: ElementClassSpec): void => {
+    const applyClasses = (classes: ElementClassDescriptor): void => {
         if (Array.isArray(classes)) {
             return classes.forEach(c => applyClasses(c));
         }
@@ -135,11 +155,13 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
 
     if (descriptor.style) {
         Object.entries(descriptor.style).forEach(([prop, val]) => {
-            if (/\-/.test(prop)) {
-                ent.element.style.setProperty(prop, (val as any).toString());
-            } else {
-                (ent.element.style as any)[prop] = val;
-            }
+            (ent.element.style as any)[prop] = val;
+        });
+    }
+
+    if (descriptor.cssVariables) {
+        Object.entries(descriptor.cssVariables).forEach(([prop, val]) => {
+            ent.element.style.setProperty("--" + prop, val as any);
         });
     }
 
@@ -219,7 +241,7 @@ const recursiveAppend = (parent: HTMLElement, c: DOMContent) => {
 
 function getWrappedElement<T extends HTMLElement>(element: T) {
     if (!elementWrapCache.has(element)) {
-        const domEntity = {
+        const domEntity: DomEntity<T> = {
             [componentDataSymbol]: {
                 dom: element,
             },
@@ -237,6 +259,15 @@ function getWrappedElement<T extends HTMLElement>(element: T) {
             },
             remove(){
                 element.remove();
+            },
+            setCSSVariable(variableNameOrTable, value?) {
+                if (typeof variableNameOrTable == "object") {
+                    Object.entries(variableNameOrTable).forEach(([k, v]) => {
+                        element.style.setProperty("--" + k, v as any);
+                    });
+                    return;
+                }
+                element.style.setProperty("--" + variableNameOrTable, value as any);
             },
             classes: element.classList,
             qsa(selector: string) {
@@ -263,7 +294,13 @@ function getWrappedElement<T extends HTMLElement>(element: T) {
             set innerHTML(v) {
                 element.innerHTML = v;
             },
-            style: element.style,
+            get value() {
+                return (element as any).value
+            },
+            set value(v: string) {
+                (element as any).value = v;
+            },
+            style: new Proxy(element.style, elementProxy) as unknown as StylesDescriptor & ((styles: StylesDescriptor) => void),
         };
         elementWrapCache.set(element, domEntity);
     }
