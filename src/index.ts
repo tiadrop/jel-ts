@@ -339,6 +339,12 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             set width(v: number) {
                 (element as any).width = v;
             },
+            get height() {
+                return (element as any).width;
+            },
+            set height(v: number) {
+                (element as any).height = v;
+            },
             style: new Proxy(element.style, elementProxy) as unknown as StylesDescriptor & ((styles: StylesDescriptor) => void),
         };
         elementWrapCache.set(element, domEntity);
