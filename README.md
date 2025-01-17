@@ -89,7 +89,7 @@ Element classes can be specified as string, `{ [className]: boolean }` and arbit
 function renderFancyButton(
     caption: DOMContent,
     onClick: () => void,
-    classes: ElementClassDefinition = []
+    classes: ElementClassDescriptor = []
 ) {
     return $.button({
         content: caption,
@@ -118,8 +118,8 @@ Jel wraps its elements in an interface for common operations plus an `append()` 
 For other operations the element is accessible via `ent.element`:
 
 ```ts
-const button = $.button();
-const rect = button.element.getBoundingClientRect();
+const div = $.div();
+div.element.requestFullscreen();
 ```
 
 ## Shorthand

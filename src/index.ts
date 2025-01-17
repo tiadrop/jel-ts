@@ -108,8 +108,20 @@ type ElementAPI<T extends HTMLElement> = {
     qsa(selector: string): DomEntity<any>[];
     append(...content: DOMContent[]): void;
     remove(): void;
+    getRect(): DOMRect;
+    focus(): void;
+    blur(): void;
 } & (T extends HTMLInputElement ? {
     value: string;
+    select(): void;
+} : T extends HTMLCanvasElement ? {
+    width: number;
+    height: number;
+    getContext(contextId: "2d", options?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D | null;
+    getContext(contextId: "bitmaprenderer", options?: ImageBitmapRenderingContextSettings): ImageBitmapRenderingContext | null;
+    getContext(contextId: "webgl", options?: WebGLContextAttributes): WebGLRenderingContext | null;
+    getContext(contextId: "webgl2", options?: WebGLContextAttributes): WebGL2RenderingContext | null;
+    getContext(contextId: string, options?: any): RenderingContext | null;
 } : {});
 
 type OptionalKeys<T> = {
@@ -222,7 +234,13 @@ const attribsProxy: ProxyHandler<HTMLElement> = {
     set: (element, key: string, value) => {
         element.setAttribute(key, value);
         return true;
-    }
+    },
+    has: (element, key: string) => {
+        return element.hasAttribute(key);
+    },
+    ownKeys: (element) => {
+        return element.getAttributeNames();
+    },
 };
 
 const recursiveAppend = (parent: HTMLElement, c: DOMContent) => {
@@ -239,9 +257,9 @@ const recursiveAppend = (parent: HTMLElement, c: DOMContent) => {
     parent.append(c);
 };
 
-function getWrappedElement<T extends HTMLElement>(element: T) {
+function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
     if (!elementWrapCache.has(element)) {
-        const domEntity: DomEntity<T> = {
+        const domEntity: DomEntity<any> = {
             [componentDataSymbol]: {
                 dom: element,
             },
@@ -275,6 +293,21 @@ function getWrappedElement<T extends HTMLElement>(element: T) {
                     (el: HTMLElement) => getWrappedElement(el)
                 );
             },
+            getRect() {
+                return element.getBoundingClientRect();
+            },
+            focus() {
+                element.focus();
+            },
+            blur() {
+                element.blur();
+            },
+            select() {
+                (element as any).select();
+            },
+            getContext(mode: string, options?: CanvasRenderingContext2DSettings) {
+                return (element as any).getContext(mode, options);
+            },
             get content() {
                 return [].slice.call(element.children).map((child: Element) => {
                     if (child instanceof HTMLElement) return getWrappedElement(child);
@@ -299,6 +332,12 @@ function getWrappedElement<T extends HTMLElement>(element: T) {
             },
             set value(v: string) {
                 (element as any).value = v;
+            },
+            get width() {
+                return (element as any).width
+            },
+            set width(v: number) {
+                (element as any).width = v;
             },
             style: new Proxy(element.style, elementProxy) as unknown as StylesDescriptor & ((styles: StylesDescriptor) => void),
         };
