@@ -21,6 +21,8 @@ type JelEntity<API, EventDataMap> = API & {
     readonly [componentDataSymbol]: JelComponentData;
 };
 
+type CSSValue = string | number;
+
 type StylesDescriptor = Partial<{
     [key in keyof CSSStyleDeclaration]: CSSValue
 }>;
@@ -36,18 +38,39 @@ interface ElementDescriptor {
     cssVariables?: Record<string, CSSValue>;
 }
 
-const elementProxy: ProxyHandler<CSSStyleDeclaration> = {
-    get(style, prop){ 
-        return style[prop as any];
+type StyleAccessor = StylesDescriptor
+    & ((styles: StylesDescriptor) => void)
+    & ((property: string, value: CSSValue) => void);
+
+type ElementAPI<T extends HTMLElement> = {
+    readonly element: T;
+    content: DOMContent;
+    classes: DOMTokenList;
+    attribs: {
+        [key: string]: string | null;
     },
-    set(style, prop, value) {
-        style[prop as any] = value;
-        return true;
-    },
-    apply(style, _, [styles]: [StylesDescriptor]) {
-        Object.entries(styles).forEach(([prop, val]) => style[prop as any] = val as any);
-    },
-};
+    style: StyleAccessor;
+    innerHTML: string;
+    setCSSVariable(table: Record<string, CSSValue>): void;
+    setCSSVariable(variableName: string, value: CSSValue): void;
+    qsa(selector: string): (Element | DomEntity<any>)[];
+    append(...content: DOMContent[]): void;
+    remove(): void;
+    getRect(): DOMRect;
+    focus(): void;
+    blur(): void;
+} & (T extends HTMLInputElement ? {
+    value: string;
+    select(): void;
+} : T extends HTMLCanvasElement ? {
+    width: number;
+    height: number;
+    getContext(contextId: "2d", options?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D | null;
+    getContext(contextId: "bitmaprenderer", options?: ImageBitmapRenderingContextSettings): ImageBitmapRenderingContext | null;
+    getContext(contextId: "webgl", options?: WebGLContextAttributes): WebGLRenderingContext | null;
+    getContext(contextId: "webgl2", options?: WebGLContextAttributes): WebGL2RenderingContext | null;
+    getContext(contextId: string, options?: any): RenderingContext | null;
+} : {});
 
 // type of `$`, describing $.TAG(...), $(element) and $("tag#id.class")
 type DomHelper = (
@@ -92,38 +115,6 @@ type JelComponentData = {
     dom: DOMContent;
 }
 
-type CSSValue = string | number;
-
-type ElementAPI<T extends HTMLElement> = {
-    readonly element: T;
-    content: DOMContent;
-    classes: DOMTokenList;
-    attribs: {
-        [key: string]: string | null;
-    },
-    style: StylesDescriptor & ((styles: StylesDescriptor) => void);
-    innerHTML: string;
-    setCSSVariable(table: Record<string, CSSValue>): void;
-    setCSSVariable(variableName: string, value: CSSValue): void;
-    qsa(selector: string): DomEntity<any>[];
-    append(...content: DOMContent[]): void;
-    remove(): void;
-    getRect(): DOMRect;
-    focus(): void;
-    blur(): void;
-} & (T extends HTMLInputElement ? {
-    value: string;
-    select(): void;
-} : T extends HTMLCanvasElement ? {
-    width: number;
-    height: number;
-    getContext(contextId: "2d", options?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D | null;
-    getContext(contextId: "bitmaprenderer", options?: ImageBitmapRenderingContextSettings): ImageBitmapRenderingContext | null;
-    getContext(contextId: "webgl", options?: WebGLContextAttributes): WebGLRenderingContext | null;
-    getContext(contextId: "webgl2", options?: WebGLContextAttributes): WebGL2RenderingContext | null;
-    getContext(contextId: string, options?: any): RenderingContext | null;
-} : {});
-
 type OptionalKeys<T> = {
     [K in keyof T]-?: {} extends Pick<T, K> ? K : never
 }[keyof T];
@@ -131,6 +122,24 @@ type OptionalKeys<T> = {
 type Optionals<T> = {
     [K in OptionalKeys<T>]-?: Exclude<T[K], undefined>;
 }
+
+const styleProxy: ProxyHandler<() => CSSStyleDeclaration> = {
+    get(style, prop){
+        return style()[prop as any];
+    },
+    set(style, prop, value) {
+        style()[prop as any] = value;
+        return true;
+    },
+    apply(getStyle, _, [stylesOrProp, value]) {
+        const style = getStyle();
+        if (typeof stylesOrProp == "object") {
+            Object.entries(stylesOrProp).forEach(([prop, val]) => style[prop as any] = val as any);
+            return;
+        }
+        style.setProperty(stylesOrProp, value);
+    },
+};
 
 function createElement<Tag extends keyof HTMLElementTagNameMap>(
     tag: Tag, descriptor: ElementDescriptor | DOMContent = {}
@@ -166,15 +175,11 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
     if (descriptor.content !== undefined) recursiveAppend(ent.element, descriptor.content);
 
     if (descriptor.style) {
-        Object.entries(descriptor.style).forEach(([prop, val]) => {
-            (ent.element.style as any)[prop] = val;
-        });
+        ent.style(descriptor.style);
     }
 
     if (descriptor.cssVariables) {
-        Object.entries(descriptor.cssVariables).forEach(([prop, val]) => {
-            ent.element.style.setProperty("--" + prop, val as any);
-        });
+        ent.setCSSVariable(descriptor.cssVariables);
     }
 
     if (descriptor.on) {
@@ -289,9 +294,13 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             },
             classes: element.classList,
             qsa(selector: string) {
-                return [].slice.call(element.querySelectorAll(selector)).map(
-                    (el: HTMLElement) => getWrappedElement(el)
+                const results: (Element | DomEntity<HTMLElement>)[] = [];
+                element.querySelectorAll(selector).forEach(
+                    (el) => results.push(
+                        el instanceof HTMLElement ? getWrappedElement(el) : el
+                    ),
                 );
+                return results;
             },
             getRect() {
                 return element.getBoundingClientRect();
@@ -345,7 +354,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             set height(v: number) {
                 (element as any).height = v;
             },
-            style: new Proxy(element.style, elementProxy) as unknown as StylesDescriptor & ((styles: StylesDescriptor) => void),
+            style: new Proxy(() => element.style, styleProxy) as unknown as StyleAccessor,
         };
         elementWrapCache.set(element, domEntity);
     }
