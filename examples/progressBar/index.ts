@@ -2,7 +2,6 @@ import { $, definePart, DOMContent, ElementClassDescriptor } from "../../src/ind
 
 export const progressBar = definePart<{
     value: number;
-    icon: DOMContent;
     classes: ElementClassDescriptor;
 }, {
     value: number;
@@ -11,6 +10,7 @@ export const progressBar = definePart<{
     icon: "",
     classes: [],
 }, (spec, append, trigger) => {
+
     let value = spec.value;
     const inner = $.div({
         classes: "jel-progress-inner",
@@ -18,10 +18,12 @@ export const progressBar = definePart<{
             fill: value,
         }
     });
+
     append($.div({
         classes: ["jel-progress", spec.classes],
         content: inner,
     }));
+
     return {
         get value(){ return value },
         set value(v: number) {
