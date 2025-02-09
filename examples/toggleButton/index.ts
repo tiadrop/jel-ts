@@ -1,9 +1,9 @@
 import { $, definePart, DOMContent, ElementClassDescriptor } from "../../src/index";
 
 export const toggleButton = definePart<{
-    caption: DOMContent;
-    state: boolean;
-    classes: ElementClassDescriptor;
+    caption?: DOMContent;
+    state?: boolean;
+    classes?: ElementClassDescriptor;
 }, {
     state: boolean;
 }, {

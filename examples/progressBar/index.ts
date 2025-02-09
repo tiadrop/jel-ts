@@ -1,13 +1,12 @@
 import { $, definePart, DOMContent, ElementClassDescriptor } from "../../src/index";
 
 export const progressBar = definePart<{
-    value: number;
-    classes: ElementClassDescriptor;
+    value?: number;
+    classes?: ElementClassDescriptor;
 }, {
     value: number;
 }, {}>({
     value: 0,
-    icon: "",
     classes: [],
 }, (spec, append, trigger) => {
 

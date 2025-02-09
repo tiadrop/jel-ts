@@ -99,7 +99,7 @@ body.append([
 
 // progress bar
 
-const demoProgressPlain = progressBar();
+const demoProgressPlain = progressBar({});
 const demoProgressRed = progressBar({ classes: "red-fg" });
 
 // simple components can be simple functions

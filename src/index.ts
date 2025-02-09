@@ -1,48 +1,46 @@
 export type ElementClassDescriptor = string | Record<string, boolean> | ElementClassDescriptor[];
-export type DOMContent = number | null | string | Element | JelEntity<object, any> | Text | DOMContent[];
-export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>, HTMLElementEventMap>;
+export type DOMContent = number | null | string | Element | JelEntity<object> | Text | DOMContent[];
+export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>>;
 
-type JelConstructor<Spec, API, EventDataMap> = (
-    spec?: Partial<Spec & CommonOptions<EventDataMap>>
-) => JelEntity<API, EventDataMap>;
+type PartConstructor<Spec, API extends object | void, EventDataMap> = (
+    spec: Spec & EventSpec<EventDataMap>
+) => JelEntity<EventHost<API, EventDataMap>>;
 
-type CommonOptions<EventDataMap> = {
-    on?: Partial<{
-        [EventID in keyof EventDataMap]: (data: EventDataMap[EventID]) => void;
-    }>
-}
+type EventSpec<EventDataMap> = EventDataMap extends object ? {
+    on?: {
+        [EventID in keyof EventDataMap]+?: (data: EventDataMap[EventID]) => void;
+    }
+} : {};
 
-type JelEntity<API, EventDataMap> = API & {
-    on<E extends keyof EventDataMap>(
-        eventId: E, handler: (
-            this: JelEntity<API, EventDataMap>, data: EventDataMap[E]
-        ) => void
-    ): void;
-    readonly [componentDataSymbol]: JelComponentData;
+type JelEntity<API extends object | void> = (API extends void ? {} : API) & {
+    readonly [entityDataSymbol]: JelEntityData;
 };
 
-type CSSValue = string | number;
+type CSSValue = string | number | null;
 
-type StylesDescriptor = Partial<{
-    [key in keyof CSSStyleDeclaration]: CSSValue
-}>;
+type StylesDescriptor = {
+    [K in keyof CSSStyleDeclaration as [
+        K,
+        CSSStyleDeclaration[K]
+    ] extends [string, string] ? K : never]+?: CSSValue
+}
+
+type StyleAccessor = StylesDescriptor
+& ((styles: StylesDescriptor) => void)
+& ((property: keyof StylesDescriptor, value: CSSValue) => void);
 
 interface ElementDescriptor {
     classes?: ElementClassDescriptor;
     content?: DOMContent;
     attribs?: Record<string, string | number | boolean>;
-    on?: Partial<{[E in keyof HTMLElementEventMap]: (
+    on?: {[E in keyof HTMLElementEventMap]+?: (
         event: HTMLElementEventMap[E]
-    ) => void}>;
+    ) => void};
     style?: StylesDescriptor;
     cssVariables?: Record<string, CSSValue>;
 }
 
-type StyleAccessor = StylesDescriptor
-    & ((styles: StylesDescriptor) => void)
-    & ((property: string, value: CSSValue) => void);
-
-type ElementAPI<T extends HTMLElement> = {
+type ElementAPI<T extends HTMLElement> = EventHost<{
     readonly element: T;
     content: DOMContent;
     classes: DOMTokenList;
@@ -53,7 +51,7 @@ type ElementAPI<T extends HTMLElement> = {
     innerHTML: string;
     setCSSVariable(table: Record<string, CSSValue>): void;
     setCSSVariable(variableName: string, value: CSSValue): void;
-    qsa(selector: string): (Element | DomEntity<any>)[];
+    qsa(selector: string): (Element | DomEntity<HTMLElement>)[];
     append(...content: DOMContent[]): void;
     remove(): void;
     getRect(): DOMRect;
@@ -65,12 +63,8 @@ type ElementAPI<T extends HTMLElement> = {
 } : T extends HTMLCanvasElement ? {
     width: number;
     height: number;
-    getContext(contextId: "2d", options?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D | null;
-    getContext(contextId: "bitmaprenderer", options?: ImageBitmapRenderingContextSettings): ImageBitmapRenderingContext | null;
-    getContext(contextId: "webgl", options?: WebGLContextAttributes): WebGLRenderingContext | null;
-    getContext(contextId: "webgl2", options?: WebGLContextAttributes): WebGL2RenderingContext | null;
-    getContext(contextId: string, options?: any): RenderingContext | null;
-} : {});
+    getContext: HTMLCanvasElement["getContext"];
+} : {}), HTMLElementEventMap>;
 
 // type of `$`, describing $.TAG(...), $(element) and $("tag#id.class")
 type DomHelper = (
@@ -111,7 +105,7 @@ type DomHelper = (
     }
 )
 
-type JelComponentData = {
+type JelEntityData = {
     dom: DOMContent;
 }
 
@@ -123,26 +117,48 @@ type Optionals<T> = {
     [K in OptionalKeys<T>]-?: Exclude<T[K], undefined>;
 }
 
+type ForbidKey<K extends string | symbol> = Record<string | symbol, any> & Partial<Record<K, never>>;
+
+type EventHost<API extends object | void, EventDataMap> = (
+    API extends object ? API : {}
+) & {
+    on<E extends keyof EventDataMap>(
+        eventId: E, handler: (
+            this: JelEntity<EventHost<API, EventDataMap>>, data: EventDataMap[E]
+        ) => void
+    ): void;
+}
+
 const styleProxy: ProxyHandler<() => CSSStyleDeclaration> = {
-    get(style, prop){
-        return style()[prop as any];
+    get(getStyle, prop){
+        return getStyle()[prop as any];
     },
-    set(style, prop, value) {
-        style()[prop as any] = value;
+    set(getStyle, prop, value) {
+        getStyle()[prop as any] = value;
         return true;
     },
-    apply(getStyle, _, [stylesOrProp, value]) {
+    apply(getStyle, _, [stylesOrProp, value]: [
+        Record<string, any> | keyof StylesDescriptor,
+        any
+    ]) {
         const style = getStyle();
         if (typeof stylesOrProp == "object") {
-            Object.entries(stylesOrProp).forEach(([prop, val]) => style[prop as any] = val as any);
+            Object.entries(stylesOrProp).forEach((
+                [prop, val]) => style[prop as any] = val
+            );
             return;
         }
-        style.setProperty(stylesOrProp, value);
+        style[stylesOrProp] = value;
     },
+    deleteProperty(getStyle, prop: keyof StylesDescriptor & string) {
+        getStyle()[prop] = null as any;
+        return true;
+    }
 };
 
 function createElement<Tag extends keyof HTMLElementTagNameMap>(
-    tag: Tag, descriptor: ElementDescriptor | DOMContent = {}
+    tag: Tag,
+    descriptor: ElementDescriptor | DOMContent = {}
 ): DomEntity<HTMLElementTagNameMap[Tag]> {
     if (isContent(descriptor)) descriptor = {content: descriptor};
 
@@ -191,16 +207,11 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
     return ent;
 };
 
-const isContent = (value: DOMContent | ElementDescriptor | undefined): value is DOMContent => {
-    return ["string", "number"].includes(typeof value) 
-    || value instanceof Element
-    || value instanceof Text
-    || Array.isArray(value)
-    || !value;
-};
-
 export const $ = new Proxy(createElement, {
-    apply(create, _, [selectorOrTagName, contentOrDescriptor]: [string | HTMLElement, DOMContent | ElementDescriptor | undefined]) {
+    apply(create, _, [selectorOrTagName, contentOrDescriptor]: [
+        string | HTMLElement,
+        DOMContent | ElementDescriptor | undefined
+    ]) {
 
         if (selectorOrTagName instanceof HTMLElement) return getWrappedElement(selectorOrTagName);
 
@@ -227,11 +238,11 @@ export const $ = new Proxy(createElement, {
             return create(tagName, descriptorOrContent);
         };
     }
-}) as DomHelper;    
+}) as DomHelper;   
 
-const componentDataSymbol = Symbol("jelComponentData");
+const entityDataSymbol = Symbol("jelComponentData");
 
-const elementWrapCache = new WeakMap<HTMLElement, DomEntity<any>>();
+const elementWrapCache = new WeakMap<HTMLElement, DomEntity<HTMLElement>>();
 const attribsProxy: ProxyHandler<HTMLElement> = {
     get: (element, key: string) => {
         return element.getAttribute(key);
@@ -255,7 +266,7 @@ const recursiveAppend = (parent: HTMLElement, c: DOMContent) => {
         return;
     }
     if (isJelEntity(c)) {
-        recursiveAppend(parent, c[componentDataSymbol].dom);
+        recursiveAppend(parent, c[entityDataSymbol].dom);
         return;
     }
     if (typeof c == "number") c = c.toString();
@@ -264,15 +275,23 @@ const recursiveAppend = (parent: HTMLElement, c: DOMContent) => {
 
 function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
     if (!elementWrapCache.has(element)) {
+        const setCSSVariable = (k: string, v: any) => {
+            if (v === null) {
+                element.style.removeProperty("--" + k);
+            } else {
+                element.style.setProperty("--" + k, v)
+            }
+        };
+
         const domEntity: DomEntity<any> = {
-            [componentDataSymbol]: {
+            [entityDataSymbol]: {
                 dom: element,
             },
             get element(){ return element },
-            on: <E extends keyof HTMLElementEventMap>(
+            on<E extends keyof HTMLElementEventMap>(
                 eventId: E,
                 handler: (data: HTMLElementEventMap[E]) => void,
-            ) => {
+            ) {
                 element.addEventListener(eventId, eventData => {
                     handler.call(domEntity, eventData);
                 });
@@ -285,12 +304,12 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             },
             setCSSVariable(variableNameOrTable, value?) {
                 if (typeof variableNameOrTable == "object") {
-                    Object.entries(variableNameOrTable).forEach(([k, v]) => {
-                        element.style.setProperty("--" + k, v as any);
-                    });
+                    Object.entries(variableNameOrTable).forEach(
+                        ([k, v]) => setCSSVariable(k, v)
+                    );
                     return;
                 }
-                element.style.setProperty("--" + variableNameOrTable, value as any);
+                setCSSVariable(variableNameOrTable, value);
             },
             classes: element.classList,
             qsa(selector: string) {
@@ -361,15 +380,43 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
     return elementWrapCache.get(element) as DomEntity<T>;
 }
 
-function isJelEntity(content: DOMContent): content is JelEntity<object | void, any> {
-    return typeof content == "object" && !!content && componentDataSymbol in content;
+const isContent = (value: DOMContent | ElementDescriptor | undefined): value is DOMContent => {
+    if (value === undefined) return false;
+    return typeof value == "string"
+    || typeof value == "number"
+    || !value
+    || value instanceof Element
+    || value instanceof Text
+    || entityDataSymbol in value
+    || Array.isArray(value);
+};
+
+function isJelEntity(content: DOMContent): content is JelEntity<object> {
+    return typeof content == "object" && !!content && entityDataSymbol in content;
 }
 
-type Reserve<T> = Record<string, any> & Partial<Record<keyof T, never>>;
+export function createEntity<
+    API extends object
+>(content: DOMContent, api: API extends DOMContent ? never : API): JelEntity<API>
+export function createEntity(content: DOMContent, api?: undefined): JelEntity<undefined>
+export function createEntity<
+    API extends Record<string | symbol, any> | undefined
+>(content: DOMContent, api?: API) {
+    if (isContent(api as any)) {
+        throw new TypeError("API object is already valid content")
+    }
+    return Object.create(api ?? {}, {
+        [entityDataSymbol]: {
+            value: {
+                dom: content
+            }
+        },
+    }) as JelEntity<API>;
+};
 
 export function definePart<
-    Spec extends Reserve<CommonOptions<any>>,
-    API extends Reserve<JelEntity<void, any>> | void = void,
+    Spec extends ForbidKey<"on">,
+    API extends ForbidKey<"on"> | void = void,
     EventDataMap extends Record<string, any> = {}
 >(
     defaultOptions: Optionals<Spec>,
@@ -381,8 +428,9 @@ export function definePart<
 ) {
     return ((spec: Spec) => {
         const fullSpec = {
-            ...defaultOptions, ...spec,
-        } as Required<Spec> & CommonOptions<JelEntity<API, EventDataMap>>;
+            ...defaultOptions,
+            ...spec,
+        } as Required<Spec> & EventSpec<EventDataMap>;
 
         const eventHandlers: Partial<{
             [EventID in keyof EventDataMap]: ((data: EventDataMap[EventID]) => void)[];
@@ -397,7 +445,7 @@ export function definePart<
             addEventListener(eventId, handler as any);
         });
 
-        let entity: JelEntity<API, EventDataMap>;
+        let entity: JelEntity<EventHost<API, EventDataMap>>;
 
         const content: DOMContent[] = [];
         const append = (c: DOMContent) => {
@@ -411,23 +459,20 @@ export function definePart<
 
         const api = init(fullSpec, append, trigger);
 
-        entity = api ? Object.create(api, {
-            [componentDataSymbol]: {
+        Object.defineProperties(api, {
+            [entityDataSymbol]: {
                 value: {
                     dom: content
                 }
             },
             on: {
-                value: addEventListener,
+                get: () => addEventListener
             }
-        }) : {
-            [componentDataSymbol]: {
-                dom: content,
-            },
-            on: addEventListener,
-        };
+        });
+
+        entity = api as typeof entity;
 
         return entity;
 
-    }) as JelConstructor<Spec, API, EventDataMap>;
+    }) as PartConstructor<Spec, API, EventDataMap>;
 };
