@@ -27,9 +27,7 @@ body.append($.form([
     $.button("Sign in"),
     $.a({
         content: ["Having trouble? ", $.strong("Recover account")],
-        attribs: {
-            href: "/recover-account",
-        }
+        href: "/recover-account",
     })
 ]));
 
@@ -39,9 +37,7 @@ body.append([
         files.map(file => $.li(
             $.a({
                 content: file.name,
-                attribs: {
-                    href: `/files/${file.name}`,
-                }
+                href: `/files/${file.name}`,
             })
         ))
     )
