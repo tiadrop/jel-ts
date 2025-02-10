@@ -29,16 +29,26 @@ type StyleAccessor = StylesDescriptor
 & ((styles: StylesDescriptor) => void)
 & ((property: keyof StylesDescriptor, value: CSSValue) => void);
 
-interface ElementDescriptor {
+type ContentlessTag = "area" | "base" | "basefont" | "br" | "col" | "frame" | "hr"
+    | "img" | "input" | "isindex" | "link" | "meta" | "param" | "textarea";
+
+type ElementDescriptor<Tag extends string> = {
     classes?: ElementClassDescriptor;
-    content?: DOMContent;
     attribs?: Record<string, string | number | boolean>;
     on?: {[E in keyof HTMLElementEventMap]+?: (
         event: HTMLElementEventMap[E]
     ) => void};
     style?: StylesDescriptor;
     cssVariables?: Record<string, CSSValue>;
-}
+} & (Tag extends "input" | "textarea" ? {
+    value?: string | number;
+} : Tag extends ContentlessTag ? {} : {
+    content?: DOMContent;
+}) & (Tag extends "img" | "script" | "iframe" ? {
+    src: string;
+} : Tag extends "a" | "link" ? {
+    href: string;
+} : {});
 
 type ElementAPI<T extends HTMLElement> = EventHost<{
     readonly element: T;
@@ -71,7 +81,7 @@ type DomHelper = (
     (
         <T extends keyof HTMLElementTagNameMap>(
             tagName: T,
-            descriptor: ElementDescriptor
+            descriptor: ElementDescriptor<T>
         ) => DomEntity<HTMLElementTagNameMap[T]>
     )
     & (
@@ -95,13 +105,15 @@ type DomHelper = (
     & (<T extends HTMLElement>(element: T) => DomEntity<T>)
     & {
         [T in keyof HTMLElementTagNameMap]: (
-            descriptor: ElementDescriptor
+            descriptor: ElementDescriptor<T>
         ) => DomEntity<HTMLElementTagNameMap[T]>
     }
     & {
-        [T in keyof HTMLElementTagNameMap]: (
-            content?: DOMContent
-        ) => DomEntity<HTMLElementTagNameMap[T]>
+        [T in keyof HTMLElementTagNameMap]: T extends ContentlessTag
+            ? () => DomEntity<HTMLElementTagNameMap[T]>
+            : (
+                content?: DOMContent
+            ) => DomEntity<HTMLElementTagNameMap[T]>
     }
 )
 
@@ -158,11 +170,14 @@ const styleProxy: ProxyHandler<() => CSSStyleDeclaration> = {
 
 function createElement<Tag extends keyof HTMLElementTagNameMap>(
     tag: Tag,
-    descriptor: ElementDescriptor | DOMContent = {}
+    descriptor: Partial<ElementDescriptor<Tag>> | DOMContent = {}
 ): DomEntity<HTMLElementTagNameMap[Tag]> {
-    if (isContent(descriptor)) descriptor = {content: descriptor};
+    if (isContent(descriptor)) return createElement(tag, {
+        content: descriptor,
+    } as any);
 
-    const ent = getWrappedElement(document.createElement(tag));
+    const domElement = document.createElement(tag);
+    const ent = getWrappedElement(domElement);
 
     const applyClasses = (classes: ElementClassDescriptor): void => {
         if (Array.isArray(classes)) {
@@ -179,16 +194,21 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
 
     applyClasses(descriptor.classes || []);
 
+    ["value", "src", "href"].forEach(prop => {
+        if ((descriptor as any)[prop] !== undefined) domElement.setAttribute(prop, (descriptor as any)[prop]);
+    });
+
+    // attribs.value / attribs.src / attribs.href override descriptor.*
     if (descriptor.attribs) {
         Object.entries(descriptor.attribs).forEach(([k, v]) => {
             if (v === false) {
                 return;
             }
-            ent.element.setAttribute(k, v === true ? k : v as string);
+            domElement.setAttribute(k, v === true ? k : v as string);
         });
     }
 
-    if (descriptor.content !== undefined) recursiveAppend(ent.element, descriptor.content);
+    if ((descriptor as any).content !== undefined) recursiveAppend(domElement, (descriptor as any).content);
 
     if (descriptor.style) {
         ent.style(descriptor.style);
@@ -210,7 +230,7 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
 export const $ = new Proxy(createElement, {
     apply(create, _, [selectorOrTagName, contentOrDescriptor]: [
         string | HTMLElement,
-        DOMContent | ElementDescriptor | undefined
+        DOMContent | ElementDescriptor<any> | undefined
     ]) {
 
         if (selectorOrTagName instanceof HTMLElement) return getWrappedElement(selectorOrTagName);
@@ -222,7 +242,7 @@ export const $ = new Proxy(createElement, {
         const descriptor = {
             classes,
             content: contentOrDescriptor,
-        } as ElementDescriptor;
+        } as ElementDescriptor<any>;
         matches?.forEach((m) => {
             const value = m.slice(1);
             if (m[0] == ".") {
@@ -234,7 +254,7 @@ export const $ = new Proxy(createElement, {
         return create(tagName as any, descriptor);
     },
     get(create, tagName: keyof HTMLElementTagNameMap) {
-        return (descriptorOrContent: ElementDescriptor | DOMContent) => {
+        return (descriptorOrContent: ElementDescriptor<string> | DOMContent) => {
             return create(tagName, descriptorOrContent);
         };
     }
@@ -380,7 +400,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
     return elementWrapCache.get(element) as DomEntity<T>;
 }
 
-const isContent = (value: DOMContent | ElementDescriptor | undefined): value is DOMContent => {
+const isContent = (value: DOMContent | ElementDescriptor<string> | undefined): value is DOMContent => {
     if (value === undefined) return false;
     return typeof value == "string"
     || typeof value == "number"
@@ -398,7 +418,7 @@ function isJelEntity(content: DOMContent): content is JelEntity<object> {
 export function createEntity<
     API extends object
 >(content: DOMContent, api: API extends DOMContent ? never : API): JelEntity<API>
-export function createEntity(content: DOMContent, api?: undefined): JelEntity<undefined>
+export function createEntity(content: DOMContent): JelEntity<void>
 export function createEntity<
     API extends Record<string | symbol, any> | undefined
 >(content: DOMContent, api?: API) {
@@ -422,7 +442,7 @@ export function definePart<
     defaultOptions: Optionals<Spec>,
     init: (
         spec: Required<Spec>,
-        append: (content: DOMContent) => void,
+        append: (...content: DOMContent[]) => void,
         trigger: <K extends keyof EventDataMap>(eventId: K, eventData: EventDataMap[K]) => void,
     ) => API
 ) {
@@ -448,7 +468,7 @@ export function definePart<
         let entity: JelEntity<EventHost<API, EventDataMap>>;
 
         const content: DOMContent[] = [];
-        const append = (c: DOMContent) => {
+        const append = (...c: DOMContent[]) => {
             if (entity) throw new Error("Component root content can only be added during initialisation");
             content.push(c)
         };
@@ -459,18 +479,11 @@ export function definePart<
 
         const api = init(fullSpec, append, trigger);
 
-        Object.defineProperties(api, {
-            [entityDataSymbol]: {
-                value: {
-                    dom: content
-                }
-            },
+        entity = createEntity(content, Object.create(api ?? {}, {
             on: {
-                get: () => addEventListener
+                value: addEventListener,
             }
-        });
-
-        entity = api as typeof entity;
+        }));
 
         return entity;
 
