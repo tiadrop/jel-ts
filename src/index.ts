@@ -31,6 +31,8 @@ type StyleAccessor = StylesDescriptor
 
 type ContentlessTag = "area" | "base" | "basefont" | "br" | "col" | "frame" | "hr"
     | "img" | "input" | "isindex" | "link" | "meta" | "param" | "textarea";
+type TagWithHref = "a" | "link";
+type TagWithSrc = "img" | "script" | "iframe";
 
 type ElementDescriptor<Tag extends string> = {
     classes?: ElementClassDescriptor;
@@ -44,15 +46,14 @@ type ElementDescriptor<Tag extends string> = {
     value?: string | number;
 } : Tag extends ContentlessTag ? {} : {
     content?: DOMContent;
-}) & (Tag extends "img" | "script" | "iframe" ? {
+}) & (Tag extends TagWithSrc ? {
     src: string;
-} : Tag extends "a" | "link" ? {
+} : Tag extends TagWithHref ? {
     href: string;
 } : {});
 
 type ElementAPI<T extends HTMLElement> = EventHost<{
     readonly element: T;
-    content: DOMContent;
     classes: DOMTokenList;
     attribs: {
         [key: string]: string | null;
@@ -67,14 +68,24 @@ type ElementAPI<T extends HTMLElement> = EventHost<{
     getRect(): DOMRect;
     focus(): void;
     blur(): void;
-} & (T extends HTMLInputElement ? {
-    value: string;
-    select(): void;
-} : T extends HTMLCanvasElement ? {
-    width: number;
-    height: number;
-    getContext: HTMLCanvasElement["getContext"];
-} : {}), HTMLElementEventMap>;
+} & (
+    T extends ContentlessTag ? {} : {
+        content: DOMContent;
+    }
+) & (
+    T extends HTMLInputElement ? {
+        value: string;
+        select(): void;
+    } : T extends HTMLCanvasElement ? {
+        width: number;
+        height: number;
+        getContext: HTMLCanvasElement["getContext"];
+    } : T extends HTMLElementTagNameMap[TagWithSrc] ? {
+        src: string;
+    } : T extends HTMLElementTagNameMap[TagWithHref] ? {
+        href: string;
+    } : {}
+), HTMLElementEventMap>;
 
 // type of `$`, describing $.TAG(...), $(element) and $("tag#id.class")
 type DomHelper = (
@@ -262,7 +273,7 @@ export const $ = new Proxy(createElement, {
 
 const entityDataSymbol = Symbol("jelComponentData");
 
-const elementWrapCache = new WeakMap<HTMLElement, DomEntity<HTMLElement>>();
+const elementWrapCache = new WeakMap<HTMLElement, DomEntity<any>>();
 const attribsProxy: ProxyHandler<HTMLElement> = {
     get: (element, key: string) => {
         return element.getAttribute(key);
@@ -381,6 +392,18 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             set value(v: string) {
                 (element as any).value = v;
             },
+            get href() {
+                return (element as any).href;
+            },
+            set href(v: string) {
+                (element as any).href = v;
+            },
+            get src() {
+                return (element as any).src;
+            },
+            set src(v: string) {
+                (element as any).src = v;
+            },
             get width() {
                 return (element as any).width
             },
@@ -470,16 +493,16 @@ export function definePart<
         const content: DOMContent[] = [];
         const append = (...c: DOMContent[]) => {
             if (entity) throw new Error("Component root content can only be added during initialisation");
-            content.push(c)
+            content.push(...c)
         };
 
         const trigger = <E extends keyof EventDataMap>(eventId: E, data: EventDataMap[E]) => {
             eventHandlers[eventId]?.forEach(fn => fn.call(entity, data));
         };
 
-        const api = init(fullSpec, append, trigger);
+        const api = init(fullSpec, append, trigger) ?? {};
 
-        entity = createEntity(content, Object.create(api ?? {}, {
+        entity = createEntity(content, Object.create(api as any, {
             on: {
                 value: addEventListener,
             }
