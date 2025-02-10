@@ -47,9 +47,9 @@ type ElementDescriptor<Tag extends string> = {
 } : Tag extends ContentlessTag ? {} : {
     content?: DOMContent;
 }) & (Tag extends TagWithSrc ? {
-    src: string;
+    src?: string;
 } : Tag extends TagWithHref ? {
-    href: string;
+    href?: string;
 } : {});
 
 type ElementAPI<T extends HTMLElement> = EventHost<{
