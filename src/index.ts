@@ -98,19 +98,19 @@ type DomHelper = (
     & (
         <T extends keyof HTMLElementTagNameMap>(
             selector: `${T}#${string}`,
-            content?: DOMContent
+            content?: T extends ContentlessTag ? void : DOMContent
         ) => DomEntity<HTMLElementTagNameMap[T]>
     )
     & (
         <T extends keyof HTMLElementTagNameMap>(
             selector: `${T}.${string}`,
-            content?: DOMContent
+            content?: T extends ContentlessTag ? void : DOMContent
         ) => DomEntity<HTMLElementTagNameMap[T]>
     )
     & (
         <T extends keyof HTMLElementTagNameMap>(
             selector: T,
-            content?: DOMContent
+            content?: T extends ContentlessTag ? void : DOMContent
         ) => DomEntity<HTMLElementTagNameMap[T]>
     )
     & (<T extends HTMLElement>(element: T) => DomEntity<T>)
