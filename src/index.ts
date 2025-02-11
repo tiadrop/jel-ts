@@ -1,6 +1,9 @@
 export type ElementClassDescriptor = string | Record<string, boolean> | ElementClassDescriptor[];
 export type DOMContent = number | null | string | Element | JelEntity<object> | Text | DOMContent[];
 export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>>;
+export type ContainerDomEntity = DomEntity<ContainerElement>;
+
+type ContainerElement = HTMLElementTagNameMap[Exclude<keyof HTMLElementTagNameMap, ContentlessTag>];
 
 type PartConstructor<Spec, API extends object | void, EventDataMap> = (
     spec: Spec & EventSpec<EventDataMap>
@@ -63,15 +66,15 @@ type ElementAPI<T extends HTMLElement> = EventHost<{
     setCSSVariable(table: Record<string, CSSValue>): void;
     setCSSVariable(variableName: string, value: CSSValue): void;
     qsa(selector: string): (Element | DomEntity<HTMLElement>)[];
-    append(...content: DOMContent[]): void;
     remove(): void;
     getRect(): DOMRect;
     focus(): void;
     blur(): void;
 } & (
-    T extends ContentlessTag ? {} : {
+    T extends ContainerElement ? {
+        append(...content: DOMContent[]): void;
         content: DOMContent;
-    }
+    } : {}
 ) & (
     T extends HTMLInputElement ? {
         value: string;
