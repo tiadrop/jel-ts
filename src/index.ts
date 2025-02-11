@@ -35,7 +35,7 @@ type StyleAccessor = StylesDescriptor
 type ContentlessTag = "area" | "base" | "basefont" | "br" | "col" | "frame" | "hr"
     | "img" | "input" | "isindex" | "link" | "meta" | "param" | "textarea";
 type TagWithHref = "a" | "link";
-type TagWithSrc = "img" | "script" | "iframe";
+type TagWithSrc = "img" | "script" | "iframe" | "video" | "audio";
 
 type ElementDescriptor<Tag extends string> = {
     classes?: ElementClassDescriptor;
@@ -87,6 +87,13 @@ type ElementAPI<T extends HTMLElement> = EventHost<{
         src: string;
     } : T extends HTMLElementTagNameMap[TagWithHref] ? {
         href: string;
+    } : {}
+) & (
+    T extends HTMLMediaElement ? {
+        play(): void;
+        pause(): void;
+        currentTime: number;
+        readonly paused: boolean;
     } : {}
 ), HTMLElementEventMap>;
 
@@ -333,9 +340,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             append(...content: DOMContent[]) {
                 recursiveAppend(element, content);
             },
-            remove(){
-                element.remove();
-            },
+            remove: () => element.remove(),
             setCSSVariable(variableNameOrTable, value?) {
                 if (typeof variableNameOrTable == "object") {
                     Object.entries(variableNameOrTable).forEach(
@@ -345,7 +350,6 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 }
                 setCSSVariable(variableNameOrTable, value);
             },
-            classes: element.classList,
             qsa(selector: string) {
                 const results: (Element | DomEntity<HTMLElement>)[] = [];
                 element.querySelectorAll(selector).forEach(
@@ -355,18 +359,12 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 );
                 return results;
             },
-            getRect() {
-                return element.getBoundingClientRect();
-            },
-            focus() {
-                element.focus();
-            },
-            blur() {
-                element.blur();
-            },
-            select() {
-                (element as any).select();
-            },
+            getRect: () => element.getBoundingClientRect(),
+            focus: () => element.focus(),
+            blur: () => element.blur(),
+            select: () => (element as any).select(),
+            play: () => (element as any).play(),
+            pause: () => (element as any).pause(),
             getContext(mode: string, options?: CanvasRenderingContext2DSettings) {
                 return (element as any).getContext(mode, options);
             },
@@ -414,12 +412,22 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 (element as any).width = v;
             },
             get height() {
-                return (element as any).width;
+                return (element as any).height;
             },
             set height(v: number) {
                 (element as any).height = v;
             },
+            get currentTime() {
+                return (element as any).currentTime;
+            },
+            set currentTime(v: number) {
+                (element as any).currentTime = v;
+            },
+            get paused() {
+                return (element as any).paused;
+            },
             style: new Proxy(() => element.style, styleProxy) as unknown as StyleAccessor,
+            classes: element.classList,
         };
         elementWrapCache.set(element, domEntity);
     }
