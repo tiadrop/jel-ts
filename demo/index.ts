@@ -1,6 +1,6 @@
 import { progressBar } from "../examples/progressBar";
 import { toggleButton } from "../examples/toggleButton";
-import { $, definePart, DOMContent, ElementClassDescriptor } from "../src/index"; // from "@xtia/jel"
+import { $, createEntity, definePart, DOMContent, ElementClassDescriptor } from "../src/index"; // from "@xtia/jel"
 
 // wrap body
 const body = $(document.body);
@@ -102,6 +102,8 @@ body.append([
 const demoProgressPlain = progressBar({});
 const demoProgressRed = progressBar({ classes: "red-fg" });
 
+
+
 // simple components can be simple functions
 const progressDeltaButton = (delta: number) => $.button({
 	content: $.code([`progressBar.value ${delta >= 0 ? "+" : "-"}= ${Math.abs(delta)}`]),
@@ -129,7 +131,7 @@ body.append([
 
 
 
-// a simpler custom component can just be a function:
+// a simpler component can just be a function:
 
 const icon = (iconId: string) => $.span({
 	classes: ["icon", `icon-${iconId}`],
@@ -138,3 +140,40 @@ const icon = (iconId: string) => $.span({
 const button = $.button({
 	content: [icon("checkmark"), " Accept"],
 });
+
+
+
+// custom DOMContent:
+
+type Person = {
+	name: string;
+	url: string;
+}
+
+function createCredit(person: Person) {
+	const link = $.a({
+		content: person.name,
+		href: person.url,
+	});
+	const para = $.p([
+		link,
+		" made this.",
+	]);
+	// pass DOMContent and (optionally) an API to createEntity():
+	return createEntity(para, {
+		setLinkColour(c: string) {
+			link.style.color = c;
+		}
+	});
+}
+
+const credit = createCredit({
+	name: "Aleta",
+	url: "https://aleta.codes"
+});
+
+// the 'entity' can be used as content
+body.append(credit);
+
+// and the API is functional
+credit.setLinkColour("#fab");

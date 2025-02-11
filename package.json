@@ -1,6 +1,6 @@
 {
   "name": "jel-ts",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "Lightweight DOM manipulation and componentisation",
   "main": "index.js",
   "directories": {

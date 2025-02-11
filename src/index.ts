@@ -1,9 +1,6 @@
 export type ElementClassDescriptor = string | Record<string, boolean> | ElementClassDescriptor[];
 export type DOMContent = number | null | string | Element | JelEntity<object> | Text | DOMContent[];
 export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>>;
-export type ContainerDomEntity = DomEntity<ContainerElement>;
-
-type ContainerElement = HTMLElementTagNameMap[Exclude<keyof HTMLElementTagNameMap, ContentlessTag>];
 
 type PartConstructor<Spec, API extends object | void, EventDataMap> = (
     spec: Spec & EventSpec<EventDataMap>
@@ -32,10 +29,12 @@ type StyleAccessor = StylesDescriptor
 & ((styles: StylesDescriptor) => void)
 & ((property: keyof StylesDescriptor, value: CSSValue) => void);
 
-type ContentlessTag = "area" | "base" | "basefont" | "br" | "col" | "frame" | "hr"
-    | "img" | "input" | "isindex" | "link" | "meta" | "param" | "textarea";
+type ContentlessTag = "area" | "br" | "hr" | "iframe" | "input"
+| "textarea" | "img" | "canvas" | "link" | "meta";
 type TagWithHref = "a" | "link";
 type TagWithSrc = "img" | "script" | "iframe" | "video" | "audio";
+type TagWithValue = "input" | "textarea";
+type ContentlessElement = HTMLElementTagNameMap[ContentlessTag];
 
 type ElementDescriptor<Tag extends string> = {
     classes?: ElementClassDescriptor;
@@ -45,13 +44,13 @@ type ElementDescriptor<Tag extends string> = {
     ) => void};
     style?: StylesDescriptor;
     cssVariables?: Record<string, CSSValue>;
-} & (Tag extends "input" | "textarea" ? {
+} & (Tag extends TagWithValue ? {
     value?: string | number;
-} : Tag extends ContentlessTag ? {} : {
+} : {}) & (Tag extends ContentlessTag ? {} : {
     content?: DOMContent;
 }) & (Tag extends TagWithSrc ? {
     src?: string;
-} : Tag extends TagWithHref ? {
+} : {}) & (Tag extends TagWithHref ? {
     href?: string;
 } : {});
 
@@ -62,7 +61,6 @@ type ElementAPI<T extends HTMLElement> = EventHost<{
         [key: string]: string | null;
     },
     style: StyleAccessor;
-    innerHTML: string;
     setCSSVariable(table: Record<string, CSSValue>): void;
     setCSSVariable(variableName: string, value: CSSValue): void;
     qsa(selector: string): (Element | DomEntity<HTMLElement>)[];
@@ -71,21 +69,25 @@ type ElementAPI<T extends HTMLElement> = EventHost<{
     focus(): void;
     blur(): void;
 } & (
-    T extends ContainerElement ? {
+    T extends ContentlessElement ? {} : {
         append(...content: DOMContent[]): void;
+        innerHTML: string;
         content: DOMContent;
-    } : {}
+    }
 ) & (
-    T extends HTMLInputElement ? {
+    T extends HTMLElementTagNameMap[TagWithValue] ? {
         value: string;
         select(): void;
-    } : T extends HTMLCanvasElement ? {
+    } : {}
+) & (T extends HTMLCanvasElement ? {
         width: number;
         height: number;
         getContext: HTMLCanvasElement["getContext"];
-    } : T extends HTMLElementTagNameMap[TagWithSrc] ? {
+    } : {}
+) & (T extends HTMLElementTagNameMap[TagWithSrc] ? {
         src: string;
-    } : T extends HTMLElementTagNameMap[TagWithHref] ? {
+    } : {}
+) & (T extends HTMLElementTagNameMap[TagWithHref] ? {
         href: string;
     } : {}
 ) & (
@@ -426,7 +428,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             get paused() {
                 return (element as any).paused;
             },
-            style: new Proxy(() => element.style, styleProxy) as unknown as StyleAccessor,
+            style: new Proxy(() => element.style, styleProxy) as StyleAccessor,
             classes: element.classList,
         };
         elementWrapCache.set(element, domEntity);

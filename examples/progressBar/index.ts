@@ -1,14 +1,12 @@
-import { $, definePart, DOMContent, ElementClassDescriptor } from "../../src/index";
+import { $, createEntity, ElementClassDescriptor } from "../../src/index";
 
-export const progressBar = definePart<{
+export const progressBar = (spec: {
     value?: number;
     classes?: ElementClassDescriptor;
-}, {
-    value: number;
-}, {}>({
-    value: 0,
-    classes: [],
-}, (spec, append, trigger) => {
+} | number = 0) => {
+
+    if (typeof spec == "number") spec = {};
+    if (spec.value === undefined) spec.value = 0;
 
     let value = spec.value;
     const inner = $.div({
@@ -18,16 +16,16 @@ export const progressBar = definePart<{
         }
     });
 
-    append($.div({
-        classes: ["jel-progress", spec.classes],
-        content: inner,
-    }));
-
-    return {
+    const api = {
         get value(){ return value },
         set value(v: number) {
             value = v;
-            inner.setCSSVariable("fill", v as any);
+            inner.setCSSVariable("fill", v);
         }
-    }
-});
+    };
+
+    return createEntity($.div({
+        classes: ["jel-progress", spec.classes ?? []],
+        content: inner,
+    }), api);
+};
