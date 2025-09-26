@@ -16,7 +16,13 @@ type JelEntity<API extends object | void> = (API extends void ? {} : API) & {
     readonly [entityDataSymbol]: JelEntityData;
 };
 
-type CSSValue = string | number | null;
+type CSSValue = string | number | null | HexCodeContainer;
+
+// @xia/rgba compat
+type HexCodeContainer = {
+    hexCode: string;
+    toString(): string;
+}
 
 type StylesDescriptor = {
     [K in keyof CSSStyleDeclaration as [
@@ -52,6 +58,9 @@ type ElementDescriptor<Tag extends string> = {
     src?: string;
 } : {}) & (Tag extends TagWithHref ? {
     href?: string;
+} : {}) & (Tag extends "canvas" ?{
+    width: number;
+    height: number;
 } : {});
 
 type ElementAPI<T extends HTMLElement> = EventHost<{
@@ -217,7 +226,7 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
 
     applyClasses(descriptor.classes || []);
 
-    ["value", "src", "href"].forEach(prop => {
+    ["value", "src", "href", "width", "height"].forEach(prop => {
         if ((descriptor as any)[prop] !== undefined) domElement.setAttribute(prop, (descriptor as any)[prop]);
     });
 
