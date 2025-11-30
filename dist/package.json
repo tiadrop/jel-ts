@@ -1,12 +1,21 @@
 {
   "name": "@xtia/jel",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "repository": {
     "url": "https://github.com/tiadrop/jel-ts",
     "type": "github"
   },
+  "sideEffects": false,
+  "types": "./index.d.ts",
+  "main": "./index.js",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./internal/*": null
+  },
   "description": "Lightweight DOM manipulation and componentisation",
-  "main": "index.js",
   "keywords": [
     "dom"
   ],

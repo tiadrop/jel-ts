@@ -1,12 +1,9 @@
 {
   "compilerOptions": {
-    "allowSyntheticDefaultImports": true,
     "noImplicitAny": true,
-    "moduleResolution": "Node16",
-    "module": "Node16",
+    "module": "preserve",
     "target": "ES2017",
     "declaration": true,
-    "allowJs": true,
     "strict": true,
     "outDir": "./dist"
   },

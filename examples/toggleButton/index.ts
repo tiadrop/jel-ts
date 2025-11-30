@@ -1,42 +1,38 @@
-import { $, definePart, DOMContent, ElementClassDescriptor } from "../../src/index";
+import { $, createEntity, createEventSource, DOMContent, ElementClassDescriptor } from "../../src/index";
 
-export const toggleButton = definePart<{
+type ToggleButtonOptions = {
     caption?: DOMContent;
     state?: boolean;
     classes?: ElementClassDescriptor;
-}, {
-    state: boolean;
-}, {
-    change: {
-        state: boolean;
-    };
-}>({
-    caption: null,
-    state: false,
-    classes: [],
-}, (spec, append, trigger) => {
-    let state = spec.state;
+    on?: {
+        change?: (event: {state: boolean}) => void;
+    }
+};
+
+export function toggleButton(options: ToggleButtonOptions = {}) {
+    const changeEvent = createEventSource(options.on?.change);
+    let state = !!options.state;
+
     const button = $.button({
         classes: [
             "toggle-button",
-            spec.classes,
-            { "toggle-button-on": spec.state }
+            options.classes,
+            { "toggle-button-on": state }
         ],
-        content: spec.caption,
+        content: options.caption,
         on: {
             click: () => {
                 state = !state;
                 button.classes.toggle("toggle-button-on", state);
-                trigger("change", { state });        
+                changeEvent.emit({ state });        
             },
         }
     });
-    append(button);
-    return {
+    return createEntity(button, {
         get state(){ return state },
         set state(v){
-            button.classes.toggle("toggle-button-on", state);
+            button.classes.toggle("toggle-button-on", v);
             state = v;
         }
-    }
-});
+    });
+}

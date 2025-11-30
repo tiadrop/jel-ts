@@ -1,9 +1,9 @@
 # Jel
 ### Or, How I Learned To Stop Worrying And Love The DOM
 
-Jel is a thin layer over the DOM to simplify element structure creation, manipulation and componentisation with 'vanilla' TS.
+Jel is a thin layer over the DOM to simplify element structure creation, manipulation and componentisation with 'vanilla' TS/JS.
 
-See [demo/index.ts](https://github.com/tiadrop/jel-ts/blob/main/demo/index.ts) for example operation. Compare with [resulting page](https://aleta.codes/jel-ts-demo/).
+See [demo/index.ts](https://github.com/tiadrop/jel-ts/blob/main/demo/index.ts) for reusable components. Compare with [resulting page](https://aleta.codes/jel-ts-demo/).
 
 ## `$` Basic Use:
 
@@ -47,7 +47,7 @@ body.append([
 
 ## `DOMContent`
 
-Content can be string, Text, HTMLElement, JelEntity or arbitrarily nested array of content. Typing as DOMContent where possible enables flexibility.
+Content can be string, Text, HTMLElement, JelEntity or arbitrarily nested array of content. Typing as DOMContent carries that flexibility to your own interfaces.
 
 ```ts
 function showDialogue(content: DOMContent) => {
@@ -125,3 +125,16 @@ If you need an element with just a class, id and/or content you can use `tag#id.
 ```ts
 showDialogue(["Hello ", $("span.green", "world")]);
 ```
+
+## Event composition
+
+Event emitters can be chained:
+
+```ts
+element.events.mousemove
+	.takeUntil(body.events.mousedown.filter(e => e.button === 1))
+	.map(ev => [ev.offsetX, ev.offsetY])
+	.apply(([x, y]) => console.log("mouse @ ", x, y));
+```
+
+For RxJS users, events can be observed with `fromEvent(element.events, "mousemove")`.

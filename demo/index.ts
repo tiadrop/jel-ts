@@ -1,14 +1,11 @@
 import { progressBar } from "../examples/progressBar";
 import { toggleButton } from "../examples/toggleButton";
-import { $, createEntity, definePart, DOMContent, ElementClassDescriptor } from "../src/index"; // from "@xtia/jel"
+import { $, createEntity, createEventSource, DOMContent, ElementClassDescriptor } from "../src/index"; // from "@xtia/jel"
 
 // wrap body
 const body = $(document.body);
 
-
-
-// toggle button
-
+// using a component (toggle button)
 body.append(
 	$.h2("Toggle button"),
 	toggleButton({
@@ -21,69 +18,60 @@ body.append(
 	})
 )
 
+// custom component
 
-// custom 'part'
-
-// spec: options to be passed to the component function
 type SuperButtonSpec = {
 	caption: DOMContent;
 	classes?: ElementClassDescriptor;
+	on?: {
+		click?: (data: SuperButtonClickEvent) => void;
+	}
 }
 
-// api: interface returned by the component function
-type SuperButtonAPI = {
-	caption: DOMContent;
-	readonly timesClicked: number;
+type SuperButtonClickEvent = {
+	totalClicks: number;
 }
 
-// event map: events your component will emit, and the data associated with each
-type SuperButtonEvents = {
-	click: {
-		totalClicks: number;
-	};
-}
-
-const superbutton = definePart<
-	SuperButtonSpec,
-	SuperButtonAPI,
-	SuperButtonEvents
->({
-	// provide default values for all optional Spec properties
-	classes: [],
-}, (spec, append, trigger) => {
-	// and an init function, where `spec` represents what might be passed to your
-	// part constructor, `append` adds DOM content to your component and `trigger`
-	// raises an event
-	
+const superbutton = (spec: SuperButtonSpec) => {
 	let timesClicked = 0;
+
+	// createEventSource creates a linked emit() and Emitter
+	const clickEvent = createEventSource<SuperButtonClickEvent>(spec.on?.click);
 	
 	const button = $.button({
 		on: {
 			click: () => {
 				timesClicked++;
-				trigger("click", { totalClicks: timesClicked });
+				// use emit() privately
+				clickEvent.emit({ totalClicks: timesClicked });
 			},
 		}
 	});
 	
 	const label = $.label(spec.caption);
 	
-	append($.div({
+	const main = $.div({
 		classes: ["superbutton", spec.classes],
 		content: [
 			button,
 			label,
 		]
-	}));
+	});
 	
-	return {
+	// createEntity wraps an API object such that it can be appended as DOMContent
+	// while retaining the interface
+	return createEntity(main, {
 		get caption(){ return label.content },
 		set caption(v){ label.content = v },
 		get timesClicked(){ return timesClicked },
-	};
-});
+		events: {
+			// expose the Emitter
+			click: clickEvent.emitter
+		}
+	});
+}
 
-// using your new part:
+// using your new component:
 const mySuperbutton = superbutton({
 	caption: "Click ☝️",
 	on: {
@@ -99,7 +87,7 @@ body.append([
 
 // progress bar
 
-const demoProgressPlain = progressBar({});
+const demoProgressPlain = progressBar();
 const demoProgressRed = progressBar({ classes: "red-fg" });
 
 
@@ -129,51 +117,3 @@ body.append([
 	]),
 ]);
 
-
-
-// a simpler component can just be a function:
-
-const icon = (iconId: string) => $.span({
-	classes: ["icon", `icon-${iconId}`],
-});
-
-const button = $.button({
-	content: [icon("checkmark"), " Accept"],
-});
-
-
-
-// custom DOMContent:
-
-type Person = {
-	name: string;
-	url: string;
-}
-
-function createCredit(person: Person) {
-	const link = $.a({
-		content: person.name,
-		href: person.url,
-	});
-	const para = $.p([
-		link,
-		" made this.",
-	]);
-	// pass DOMContent and (optionally) an API to createEntity():
-	return createEntity(para, {
-		setLinkColour(c: string) {
-			link.style.color = c;
-		}
-	});
-}
-
-const credit = createCredit({
-	name: "Aleta",
-	url: "https://aleta.codes"
-});
-
-// the 'entity' can be used as content
-body.append(credit);
-
-// and the API is functional
-credit.setLinkColour("#fab");
