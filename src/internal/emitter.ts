@@ -153,10 +153,10 @@ export class EventEmitter<T> extends Emitter<T> {
     }
 
     throttle(ms: number) {
-        let lastTime = 0;
+        let lastTime = -Infinity;
         const listen = this.transform((value, emit) => {
-            const now = Date.now();
-            if (now < lastTime + ms) {
+            const now = performance.now();
+            if (now >= lastTime + ms) {
                 lastTime = now;
                 emit(value);
             }
