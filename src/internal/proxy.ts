@@ -1,29 +1,28 @@
-import { StylesDescriptor } from "./types";
+import { SetGetStyleFunc, CSSProperty } from "./types";
 import { EventEmitter } from "./emitter"
 
-export const styleProxy: ProxyHandler<() => CSSStyleDeclaration> = {
-    get(getStyle, prop){
-        return getStyle()[prop as any];
+export const styleProxy: ProxyHandler<SetGetStyleFunc> = {
+    get(style, prop: CSSProperty){
+        return style(prop);
     },
-    set(getStyle, prop, value) {
-        getStyle()[prop as any] = value;
+    set(style, prop: CSSProperty, value) {
+        style(prop, value);
         return true;
     },
-    apply(getStyle, _, [stylesOrProp, value]: [
-        Record<string, any> | keyof StylesDescriptor,
+    apply(style, _, [stylesOrProp, value]: [
+        CSSProperty,
         any
     ]) {
-        const style = getStyle();
         if (typeof stylesOrProp == "object") {
-            Object.entries(stylesOrProp).forEach((
-                [prop, val]) => style[prop as any] = val
+            Object.entries(stylesOrProp).forEach(
+                ([prop, val]) => style(prop as CSSProperty, val as string)
             );
             return;
         }
-        style[stylesOrProp] = value;
+        style(stylesOrProp, value);
     },
-    deleteProperty(getStyle, prop: keyof StylesDescriptor & string) {
-        getStyle()[prop] = null as any;
+    deleteProperty(style, prop: CSSProperty & string) {
+        style(prop, null);
         return true;
     }
 };

@@ -188,6 +188,13 @@ export class EventEmitter<T> extends Emitter<T> {
 		return new EventEmitter<T>(listen);
 	}
 
+	/**
+	 * **Experimental**: May change in future revisions
+	 * Note: potential leak - This link will remain subscribed to the parent
+	 * until it emits, regardless of subscriptions to this link.
+	 * @param notifier 
+	 * @returns 
+	 */
 	once() {
 		const { emit, listen } = createListenable<T>();
 		const unsub = this.apply(v => {
@@ -218,6 +225,13 @@ export class EventEmitter<T> extends Emitter<T> {
 		return new EventEmitter(listen);
 	}
 
+	/**
+	 * **Experimental**: May change in future revisions
+	 * Note: potential leak - This link will remain subscribed to the parent
+	 * until emission limit is reached, regardless of subscriptions to this link.
+	 * @param notifier 
+	 * @returns 
+	 */
 	take(limit: number) {
 		const { emit, listen } = createListenable<T>();
 		let count = 0;
@@ -245,6 +259,13 @@ export class EventEmitter<T> extends Emitter<T> {
 		return new EventEmitter<T>(listen);
 	}
 
+	/**
+	 * **Experimental**: May change in future revisions
+	 * Note: potential leak - This link will remain subscribed to the notifier
+	 * until it emits, regardless of subscriptions to this link.
+	 * @param notifier 
+	 * @returns 
+	 */
 	takeUntil(notifier: Emitter<any>): Emitter<T> {
 		const { emit, listen } = createListenable<T>();	
 		const unsub = this.apply(v => {
@@ -255,7 +276,7 @@ export class EventEmitter<T> extends Emitter<T> {
 			unsubNotifier();
 		});
 		
-		return new Emitter(listen);
+		return new EventEmitter<T>(listen);
 	}
 }
 

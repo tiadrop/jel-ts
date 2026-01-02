@@ -1,5 +1,6 @@
+import { UnsubscribeFunc } from "./emitter.js";
 import { attribsProxy, eventsProxy, styleProxy } from "./proxy";
-import { DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, EventsAccessor, StyleAccessor } from "./types";
+import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, EventsAccessor, ReactiveSource, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types";
 import { entityDataSymbol, isContent, isJelEntity } from "./util";
 
 const elementWrapCache = new WeakMap<HTMLElement, DomEntity<any>>();
@@ -111,6 +112,34 @@ export const $ = new Proxy(createElement, {
     }
 }) as DomHelper;
 
+const elementMutationMap = new WeakMap<Node, {
+    add: () => void;
+    remove: () => void;
+}>();
+
+let mutationObserver: MutationObserver | null = null;
+function observeMutations() {
+    if (mutationObserver !== null) return;
+    mutationObserver = new MutationObserver((mutations) => {
+        mutations.forEach(mut => {
+            mut.addedNodes.forEach(node => {
+                if (elementMutationMap.has(node)) {
+                    elementMutationMap.get(node)!.add();
+                }
+            });
+            mut.removedNodes.forEach(node => {
+                if (elementMutationMap.has(node)) {
+                    elementMutationMap.get(node)!.remove();
+                }
+            })
+        })  
+    });
+    mutationObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+    })
+}
+
 
 function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
     if (!elementWrapCache.has(element)) {
@@ -121,6 +150,65 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 element.style.setProperty("--" + k, v)
             }
         };
+
+        const styleListeners: Record<string, {
+            subscribe: () => UnsubscribeFunc;
+            unsubscribe: null | UnsubscribeFunc;
+        }> = {};
+
+        function addStyleListener(prop: CSSProperty, source: ReactiveSource<CSSValue>) {
+            const subscribe = "subscribe" in source
+                ? () => source.subscribe(v => element.style[prop] = v as any)
+                : () => source.listen(v => element.style[prop] = v as any);
+            styleListeners[prop] = {
+                subscribe,
+                unsubscribe: element.isConnected ? subscribe() : null,
+            };
+            if (!elementMutationMap.has(element)) {
+                elementMutationMap.set(element, {
+                    add: () => {
+                        Object.values(styleListeners).forEach(l => l.unsubscribe = l.subscribe?.())
+                    },
+                    remove: () => {
+                        Object.values(styleListeners).forEach(l => {
+                            l.unsubscribe?.();
+                            l.unsubscribe = null;
+                        })
+                    }
+                })
+            }
+            observeMutations();
+        }
+
+        function removeStyleListener(prop: string) {
+            if (styleListeners[prop].unsubscribe) {
+                styleListeners[prop].unsubscribe();
+            }
+            delete styleListeners[prop];
+            if (Object.keys(styleListeners).length == 0) {
+                elementMutationMap.delete(element);
+            }
+        }
+
+
+        function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | ReactiveSource<CSSValue>): void
+        function setStyle(prop: keyof StylesDescriptor): string
+        function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | ReactiveSource<CSSValue>) {
+            if (styleListeners[prop]) removeStyleListener(prop);
+            if (typeof value == "object" && value) {
+                if ("listen" in value || "subscribe" in value) {
+                    addStyleListener(prop, value);
+                    return;
+                }
+                value = value.toString();
+            }
+            if (value === undefined) {
+                return prop in styleListeners
+                    ? styleListeners[prop].subscribe
+                    : element.style[prop];
+            }
+            element.style[prop] = value as string;
+        }
 
         const domEntity: DomEntity<any> = {
             [entityDataSymbol]: {
@@ -234,7 +322,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                     element.setAttribute("name", v);
                 }
             },
-            style: new Proxy(() => element.style, styleProxy) as StyleAccessor,
+            style: new Proxy<SetGetStyleFunc>(setStyle as any, styleProxy) as unknown as StyleAccessor,
             classes: element.classList,
             events: new Proxy(element, eventsProxy) as unknown as EventsAccessor
         };

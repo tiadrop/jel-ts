@@ -1,12 +1,18 @@
-import { EventEmitter } from "./emitter";
+import { EventEmitter, UnsubscribeFunc } from "./emitter";
 import { entityDataSymbol } from "./util";
 
 export type ElementClassDescriptor = string | Record<string, boolean | undefined> | undefined | ElementClassDescriptor[];
 export type DOMContent = number | null | string | Element | JelEntity<object> | Text | DOMContent[];
 export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>>;
 
+export type ReactiveSource<T> = ({
+    listen: (handler: (value: T) => void) => UnsubscribeFunc;
+} | {
+    subscribe: (handler: (value: T) => void) => UnsubscribeFunc;
+})
 
-type CSSValue = string | number | null | HexCodeContainer;
+export type CSSValue = string | number | null | HexCodeContainer;
+export type CSSProperty = keyof StylesDescriptor;
 
 // @xia/rgba compat
 type HexCodeContainer = {
@@ -18,12 +24,17 @@ export type StylesDescriptor = {
     [K in keyof CSSStyleDeclaration as [
         K,
         CSSStyleDeclaration[K]
-    ] extends [string, string] ? K : never]+?: CSSValue
+    ] extends [string, string] ? K : never]+?: CSSValue | ReactiveSource<CSSValue>
 }
 
-export type StyleAccessor = StylesDescriptor
-& ((styles: StylesDescriptor) => void)
-& ((property: keyof StylesDescriptor, value: CSSValue) => void);
+export type SetStyleFunc = ((property: CSSProperty, value: CSSValue | ReactiveSource<CSSValue>) => void);
+
+export type SetGetStyleFunc = SetStyleFunc
+& ((property: CSSProperty) => string | ReactiveSource<CSSValue>);
+
+export type StyleAccessor = ((styles: StylesDescriptor) => void)
+& StylesDescriptor
+& SetStyleFunc;
 
 type ContentlessTag = "area" | "br" | "hr" | "iframe" | "input"
 | "textarea" | "img" | "canvas" | "link" | "meta" | "source"
@@ -48,7 +59,7 @@ export type ElementDescriptor<Tag extends string> = {
 } & (Tag extends TagWithValue ? {
     value?: string | number;
 } : {}) & (Tag extends ContentlessTag ? {} : {
-    content?: DOMContent;
+    content?: DOMContent | ReactiveSource<DOMContent>;
 }) & (Tag extends TagWithSrc ? {
     src?: string;
 } : {}) & (Tag extends TagWithHref ? {
