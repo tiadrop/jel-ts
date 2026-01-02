@@ -138,3 +138,22 @@ element.events.mousemove
 ```
 
 For RxJS users, events can be observed with `fromEvent(element.events, "mousemove")`.
+
+## Reactive styles
+
+Style properties can be emitter subscriptions:
+
+```ts
+const mousePosition$ = $(document.body).events.mousemove
+    .map(ev => ({x: ev.clientX, y: ev.clientY}));
+
+const virtualCursor = $.div({
+    classes: "virtual-cursor",
+    style: {
+        left: mousePosition$.map(v => v.x + "px"),
+        top: mousePosition$.map(v => v.y + "px")
+    }
+});
+```
+
+Emitters for this purpose can be Jel events, @xtia/timeline progressions, RxJS Observables or any object with either `subscribe()` or `listen()` that returns teardown logic.
