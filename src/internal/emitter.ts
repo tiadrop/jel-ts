@@ -180,14 +180,6 @@ export class EventEmitter<T> extends Emitter<T> {
         });
         return new EventEmitter(listen);
     }
-
-	filter(check: (value: T) => boolean) {
-		const listen = this.transform<T>(
-			(value, emit) => check(value) && emit(value)
-		)
-		return new EventEmitter<T>(listen);
-	}
-
 	/**
 	 * **Experimental**: May change in future revisions
 	 * Note: potential leak - This link will remain subscribed to the parent
@@ -249,16 +241,6 @@ export class EventEmitter<T> extends Emitter<T> {
 		return new EventEmitter(listen);
 	}
 
-	tap(cb: Handler<T>) {
-		const listen = this.transform(
-			(value, emit) => {
-				cb(value);
-				emit(value);
-			}
-		)
-		return new EventEmitter<T>(listen);
-	}
-
 	/**
 	 * **Experimental**: May change in future revisions
 	 * Note: potential leak - This link will remain subscribed to the notifier
@@ -276,6 +258,107 @@ export class EventEmitter<T> extends Emitter<T> {
 			unsubNotifier();
 		});
 		
+		return new EventEmitter<T>(listen);
+	}
+
+	/**
+	 * Creates a chainable emitter that immediately emits a value to every new subscriber,
+	 * then forwards parent emissions
+	 * @param value 
+	 * @returns A new emitter that emits a value to new subscribers and forwards all values from the parent
+	 */
+	immediate(value: T) {
+		return new EventEmitter<T>(handle => {
+			handle(value);
+			return this.onListen(handle);
+		});
+	}
+	cached() {
+		let cache: null | {value: T} = null;
+		let unsub: null | UnsubscribeFunc = null;
+		const {listen, emit} = createListenable<T>(
+			() => {
+				unsub = this.onListen((value => {
+					cache = { value };
+					emit(value);
+				}))
+			},
+			() => {
+				unsub!();
+			}
+		);
+		return new EventEmitter<T>(handler => {
+			if (cache) handler(cache.value);
+			return listen(handler);
+		})
+	}
+	/**
+	 * Creates a chainable emitter that applies arbitrary transformation to values emitted by its parent
+	 * @param mapFunc 
+	 * @returns Listenable: emits transformed values
+	 */
+	map<R>(mapFunc: (value: T) => R): EventEmitter<R> {
+		const listen = this.transform<R>(
+			(value, emit) => emit(mapFunc(value))
+		)
+		return new EventEmitter(listen);
+	}
+	/**
+	 * Creates a chainable emitter that selectively forwards emissions along the chain
+	 * @param check Function that takes an emitted value and returns true if the emission should be forwarded along the chain
+	 * @returns Listenable: emits values that pass the filter
+	 */
+	filter(check: (value: T) => boolean): EventEmitter<T> {
+		const listen = this.transform<T>(
+			(value, emit) => check(value) && emit(value)
+		)
+		return new EventEmitter<T>(listen);
+	}
+	/**
+	 * Creates a chainable emitter that discards emitted values that are the same as the last value emitted by the new emitter
+	 * @param compare Optional function that takes the previous and next values and returns true if they should be considered equal
+	 * 
+	 * If no `compare` function is provided, values will be compared via `===`
+	 * @returns Listenable: emits non-repeating values
+	 */
+	dedupe(compare?: (a: T, b: T) => boolean): EventEmitter<T> {
+		let previous: null | { value: T; } = null;
+		const listen = this.transform(
+			(value, emit) => {
+				if (
+					!previous || (
+						compare
+							? !compare(previous.value, value)
+							: (previous.value !== value)
+					)
+				) {
+					emit(value);
+					previous = { value };
+				}
+
+			}
+		)
+		return new EventEmitter<T>(listen);
+	}
+	
+	/**
+	 * Creates a chainable emitter that mirrors emissions from the parent emitter, invoking the provided callback `cb` as a side effect for each emission.  
+	 * 
+	 * The callback `cb` is called exactly once per parent emission, regardless of how many listeners are attached to the returned emitter.
+	 * All listeners attached to the returned emitter receive the same values as the parent emitter.
+	 * 
+	 * *Note*, the side effect `cb` is only invoked when there is at least one listener attached to the returned emitter
+	 * 
+	 * @param cb A function to be called as a side effect for each value emitted by the parent emitter.
+	 * @returns A new emitter that forwards all values from the parent, invoking `cb` as a side effect.
+	 */
+	tap(cb: Handler<T>): EventEmitter<T> {
+		const listen = this.transform(
+			(value, emit) => {
+				cb(value);
+				emit(value);
+			}
+		)
 		return new EventEmitter<T>(listen);
 	}
 }
@@ -337,4 +420,19 @@ export function createListenable<T>(onAddFirst?: () => void, onRemoveLast?: () =
 		listen: addListener,
 		emit: (value: T) => handlers.forEach(h => h.fn(value)),
 	};
+}
+
+
+export function interval(t: number | {asMilliseconds: number}) {
+	let intervalId: ReturnType<typeof setInterval> | null = null;
+	let idx = 0;
+	const {emit, listen} = createListenable<number>(
+		() => {
+			intervalId = setInterval(() => {
+				emit(idx++);
+			}, typeof t == "number" ? t : t.asMilliseconds);
+		},
+		() => clearInterval(intervalId!),
+	);
+	return new EventEmitter(listen);
 }
