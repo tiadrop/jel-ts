@@ -121,17 +121,21 @@ let mutationObserver: MutationObserver | null = null;
 function observeMutations() {
     if (mutationObserver !== null) return;
     mutationObserver = new MutationObserver((mutations) => {
+        const recursiveAdd = (node: Node) => {
+            if (elementMutationMap.has(node)) {
+                elementMutationMap.get(node)!.add();
+            }
+            if (node.hasChildNodes()) node.childNodes.forEach(recursiveAdd);
+        };
+        const recursiveRemove = (node: Node) => {
+            if (elementMutationMap.has(node)) {
+                elementMutationMap.get(node)!.remove();
+            }
+            if (node.hasChildNodes()) node.childNodes.forEach(recursiveRemove);
+        }
         mutations.forEach(mut => {
-            mut.addedNodes.forEach(node => {
-                if (elementMutationMap.has(node)) {
-                    elementMutationMap.get(node)!.add();
-                }
-            });
-            mut.removedNodes.forEach(node => {
-                if (elementMutationMap.has(node)) {
-                    elementMutationMap.get(node)!.remove();
-                }
-            })
+            mut.addedNodes.forEach(node => recursiveAdd(node));
+            mut.removedNodes.forEach(node => recursiveRemove(node));
         })  
     });
     mutationObserver.observe(document.body, {
