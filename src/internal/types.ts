@@ -55,7 +55,7 @@ export type ElementDescriptor<Tag extends string> = {
         event: HTMLElementEventMap[E]
     ) => void};
     style?: StylesDescriptor;
-    cssVariables?: Record<string, CSSValue>;
+    cssVariables?: Record<string, CSSValue | ReactiveSource<CSSValue>>;
 } & (Tag extends TagWithValue ? {
     value?: string | number;
 } : {}) & (Tag extends ContentlessTag ? {} : {
@@ -81,8 +81,8 @@ type ElementAPI<T extends HTMLElement> = {
     },
     readonly events: EventsAccessor;
     readonly style: StyleAccessor;
-    setCSSVariable(variableName: string, value: CSSValue): void;
-    setCSSVariable(table: Record<string, CSSValue>): void;
+    setCSSVariable(variableName: string, value: CSSValue | ReactiveSource<CSSValue>): void;
+    setCSSVariable(table: Record<string, CSSValue | ReactiveSource<CSSValue>>): void;
     qsa(selector: string): (Element | DomEntity<HTMLElement>)[];
     remove(): void;
     getRect(): DOMRect;
@@ -97,7 +97,7 @@ type ElementAPI<T extends HTMLElement> = {
     T extends ContentlessElement ? {} : {
         append(...content: DOMContent[]): void;
         innerHTML: string;
-        content: DOMContent;
+        content: DOMContent | ReactiveSource<DOMContent>;
     }
 ) & (
     T extends HTMLElementTagNameMap[TagWithValue] ? {

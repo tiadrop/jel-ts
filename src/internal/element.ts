@@ -6,7 +6,7 @@ import { entityDataSymbol, isContent, isJelEntity } from "./util";
 const elementWrapCache = new WeakMap<HTMLElement, DomEntity<any>>();
 
 const recursiveAppend = (parent: HTMLElement, c: DOMContent) => {
-    if (c === null) return;
+    if (c === null || c === undefined) return;
     if (Array.isArray(c)) {
         c.forEach(item => recursiveAppend(parent, item));
         return;
@@ -60,7 +60,9 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
         });
     }
 
-    if ((descriptor as any).content !== undefined) recursiveAppend(domElement, (descriptor as any).content);
+    if ("content" in descriptor) {
+        (ent as any).content = descriptor.content;
+    }
 
     if (descriptor.style) {
         ent.style(descriptor.style);
@@ -144,6 +146,14 @@ function observeMutations() {
     })
 }
 
+type PropertyListener = {
+    subscribe: () => UnsubscribeFunc;
+    unsubscribe: UnsubscribeFunc | null;
+}
+
+function isReactiveSource(value: any): value is ReactiveSource<any> {
+    return typeof value == "object" && value && ("listen" in value || "subscribe" in value);
+}
 
 function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
     if (!elementWrapCache.has(element)) {
@@ -155,28 +165,46 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             }
         };
 
-        const styleListeners: Record<string, {
-            subscribe: () => UnsubscribeFunc;
-            unsubscribe: null | UnsubscribeFunc;
-        }> = {};
+        const listeners: {
+            style: Record<string, PropertyListener>;
+            cssVariable: Record<string, PropertyListener>;
+            content: Record<string, PropertyListener>;
+        } = {
+            style: {},
+            cssVariable: {},
+            content: {},
+        };
 
-        function addStyleListener(prop: CSSProperty, source: ReactiveSource<CSSValue>) {
+        function addListener(type: keyof typeof listeners, prop: string, source: ReactiveSource<any>) {
+            const set = {
+                style: (v: any) => element.style[prop as CSSProperty] = v,
+                cssVariable: (v: any) => setCSSVariable(prop, v),
+                content: (v: any) => {
+                    element.innerHTML = "";
+                    recursiveAppend(element, v);
+                }
+            }[type];
             const subscribe = "subscribe" in source
-                ? () => source.subscribe(v => element.style[prop] = v as any)
-                : () => source.listen(v => element.style[prop] = v as any);
-            styleListeners[prop] = {
+                ? () => source.subscribe(set)
+                : () => source.listen(set);
+            
+            listeners[type][prop] = {
                 subscribe,
                 unsubscribe: element.isConnected ? subscribe() : null,
             };
             if (!elementMutationMap.has(element)) {
                 elementMutationMap.set(element, {
                     add: () => {
-                        Object.values(styleListeners).forEach(l => l.unsubscribe = l.subscribe?.())
+                        Object.values(listeners).forEach(group => {
+                            Object.values(group).forEach(l => l.unsubscribe = l.subscribe?.());
+                        });
                     },
                     remove: () => {
-                        Object.values(styleListeners).forEach(l => {
-                            l.unsubscribe?.();
-                            l.unsubscribe = null;
+                        Object.values(listeners).forEach(group => {
+                            Object.values(group).forEach(l => {
+                                l.unsubscribe?.();
+                                l.unsubscribe = null;
+                            })
                         })
                     }
                 })
@@ -184,12 +212,12 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             observeMutations();
         }
 
-        function removeStyleListener(prop: string) {
-            if (styleListeners[prop].unsubscribe) {
-                styleListeners[prop].unsubscribe();
+        function removeListener(type: keyof typeof listeners, prop: string) {
+            if (listeners[type][prop].unsubscribe) {
+                listeners[type][prop].unsubscribe();
             }
-            delete styleListeners[prop];
-            if (Object.keys(styleListeners).length == 0) {
+            delete listeners[type][prop];
+            if (!Object.keys(listeners).some(group => Object.keys(group).length == 0)) {
                 elementMutationMap.delete(element);
             }
         }
@@ -198,17 +226,17 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
         function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | ReactiveSource<CSSValue>): void
         function setStyle(prop: keyof StylesDescriptor): string
         function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | ReactiveSource<CSSValue>) {
-            if (styleListeners[prop]) removeStyleListener(prop);
+            if (listeners.style[prop]) removeListener("style", prop);
             if (typeof value == "object" && value) {
                 if ("listen" in value || "subscribe" in value) {
-                    addStyleListener(prop, value);
+                    addListener("style", prop, value);
                     return;
                 }
                 value = value.toString();
             }
             if (value === undefined) {
-                return prop in styleListeners
-                    ? styleListeners[prop].subscribe
+                return prop in listeners
+                    ? listeners.style[prop].subscribe
                     : element.style[prop];
             }
             element.style[prop] = value as string;
@@ -228,16 +256,29 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 });
             },
             append(...content: DOMContent[]) {
+                if (listeners.content?.[""]) removeListener("content", "");
                 recursiveAppend(element, content);
             },
             remove: () => element.remove(),
             setCSSVariable(variableNameOrTable, value?) {
                 if (typeof variableNameOrTable == "object") {
                     Object.entries(variableNameOrTable).forEach(
-                        ([k, v]) => setCSSVariable(k, v)
+                        ([k, v]) => {
+                            if (isReactiveSource(v)) {
+                                addListener("cssVariable", k, v);
+                                return;
+                            }
+                            setCSSVariable(k, v);
+                        }
                     );
                     return;
                 }
+                if (listeners.cssVariable[variableNameOrTable]) removeListener("cssVariable", variableNameOrTable);
+                if (isReactiveSource(value)) {
+                    addListener("cssVariable", variableNameOrTable, value);
+                    return;
+                }
+
                 setCSSVariable(variableNameOrTable, value);
             },
             qsa(selector: string) {
@@ -264,9 +305,14 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                     return child;
                 }) as DOMContent;
             },
-            set content(v: DOMContent) {
+            set content(v: DOMContent | ReactiveSource<DOMContent>) {
+                if (listeners.content?.[""]) removeListener("content", "");
+                if (isReactiveSource(v)) {
+                    addListener("content", "", v);
+                    return;
+                }
                 element.innerHTML = "";
-                recursiveAppend(element, v);
+                recursiveAppend(element, v as DOMContent);
             },
             attribs: new Proxy(element, attribsProxy) as unknown as {
                 [key: string]: string | null;
