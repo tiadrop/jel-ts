@@ -125,8 +125,8 @@ export class Emitter<T> {
 	 * ```
 	 * @param cb 
 	 */
-	fork(cb: (branch: this) => void): this {
-		cb(this);
+	fork(...cb: ((branch: this) => void)[]): this {
+		cb.forEach(cb => cb(this));
 		return this;
 	}
 }
@@ -367,8 +367,8 @@ export class EventEmitter<T> extends Emitter<T> {
  * Creates a linked Emitter and emit() pair
  * @example
  * ```ts
- * function createForm(options: { onsubmit?: (data: FormData) => void }) {
- *   const submitEvents = createEventSource(options.onsubmit);
+ * function createForm(options?: { onsubmit?: (data: FormData) => void }) {
+ *   const submitEvents = createEventSource(options?.onsubmit);
  *   const form = $.form({
  *     on: {
  *       submit: (e) => {
