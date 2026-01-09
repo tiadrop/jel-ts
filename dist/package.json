@@ -15,7 +15,11 @@
     },
     "./internal/*": null
   },
-  "description": "Lightweight DOM manipulation and componentisation",
+  "scripts": {
+    "prepublishOnly": "cp ../README.md .",
+    "postpublish": "rm README.md"
+  },
+  "description": "Lightweight DOM manipulation, componentisation and reactivity",
   "keywords": [
     "dom"
   ],
