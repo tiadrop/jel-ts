@@ -157,3 +157,9 @@ const virtualCursor = $.div({
 ```
 
 Emitters for this purpose can be Jel events, @xtia/timeline progressions, RxJS Observables or any object with either `subscribe()` or `listen()` that returns teardown logic.
+
+```ts
+import { animate } from "@xtia/timeline";
+
+button.style.opacity = animate(500).tween(0, 1);
+```
