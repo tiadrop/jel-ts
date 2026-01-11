@@ -1,4 +1,7 @@
 export { DomEntity, ElementClassDescriptor, ElementDescriptor, DOMContent, DomHelper, StyleAccessor, JelEntity } from "./internal/types";
-export { $ } from "./internal/element"
+import { $ } from "./internal/element"
 export { createEntity } from "./internal/util"
 export { createEventSource, interval } from "./internal/emitter";
+
+export { $ };
+export const $body = $(document.body);
