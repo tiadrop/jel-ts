@@ -2,8 +2,14 @@ type Handler<T> = (value: T) => void;
 export type ListenFunc<T> = (handler: Handler<T>) => UnsubscribeFunc;
 export type UnsubscribeFunc = () => void;
 
-export class Emitter<T> {
-	protected constructor(protected onListen: ListenFunc<T>) {}
+type Emitter<T> = {
+	subscribe: (callback: (value: T) => void) => UnsubscribeFunc;
+} | {
+	listen: (callback: (value: T) => void) => UnsubscribeFunc;
+}
+
+export class EventEmitter<T> {
+	constructor(protected onListen: ListenFunc<T>) {}
 
 	protected transform<R = T>(
 		handler: (value: T, emit: (value: R) => void) => void
@@ -21,7 +27,6 @@ export class Emitter<T> {
 		);
 		return listen;
 	}
-
 
 	/**
 	 * Compatibility alias for `apply()` - registers a function to receive emitted values
@@ -44,22 +49,22 @@ export class Emitter<T> {
 	 * @param mapFunc 
 	 * @returns Listenable: emits transformed values
 	 */
-	map<R>(mapFunc: (value: T) => R): Emitter<R> {
+	map<R>(mapFunc: (value: T) => R) {
 		const listen = this.transform<R>(
 			(value, emit) => emit(mapFunc(value))
 		)
-		return new Emitter(listen);
+		return new EventEmitter(listen);
 	}
 	/**
 	 * Creates a chainable emitter that selectively forwards emissions along the chain
 	 * @param check Function that takes an emitted value and returns true if the emission should be forwarded along the chain
 	 * @returns Listenable: emits values that pass the filter
 	 */
-	filter(check: (value: T) => boolean): Emitter<T> {
+	filter(check: (value: T) => boolean) {
 		const listen = this.transform<T>(
 			(value, emit) => check(value) && emit(value)
 		)
-		return new Emitter<T>(listen);
+		return new EventEmitter<T>(listen);
 	}
 	/**
 	 * Creates a chainable emitter that discards emitted values that are the same as the last value emitted by the new emitter
@@ -68,7 +73,7 @@ export class Emitter<T> {
 	 * If no `compare` function is provided, values will be compared via `===`
 	 * @returns Listenable: emits non-repeating values
 	 */
-	dedupe(compare?: (a: T, b: T) => boolean): Emitter<T> {
+	dedupe(compare?: (a: T, b: T) => boolean) {
 		let previous: null | { value: T; } = null;
 		const listen = this.transform(
 			(value, emit) => {
@@ -85,7 +90,7 @@ export class Emitter<T> {
 
 			}
 		)
-		return new Emitter<T>(listen);
+		return new EventEmitter<T>(listen);
 	}
 	
 	/**
@@ -99,14 +104,14 @@ export class Emitter<T> {
 	 * @param cb A function to be called as a side effect for each value emitted by the parent emitter.
 	 * @returns A new emitter that forwards all values from the parent, invoking `cb` as a side effect.
 	 */
-	tap(cb: Handler<T>): Emitter<T> {
+	tap(cb: Handler<T>) {
 		const listen = this.transform(
 			(value, emit) => {
 				cb(value);
 				emit(value);
 			}
 		)
-		return new Emitter<T>(listen);
+		return new EventEmitter<T>(listen);
 	}
 	/**
 	 * Immediately passes this emitter to a callback and returns this emitter
@@ -128,12 +133,6 @@ export class Emitter<T> {
 	fork(...cb: ((branch: this) => void)[]): this {
 		cb.forEach(cb => cb(this));
 		return this;
-	}
-}
-
-export class EventEmitter<T> extends Emitter<T> {
-	constructor(listen: ListenFunc<T>) {
-		super(listen);
 	}
 
     debounce(ms: number) {
@@ -164,7 +163,7 @@ export class EventEmitter<T> extends Emitter<T> {
         return new EventEmitter(listen);
     }
 
-    batch(ms: number): Emitter<T[]> {
+    batch(ms: number) {
         let items: T[] = [];
         let active = false;
         const listen = this.transform<T[]>((value, emit) => {
@@ -181,19 +180,42 @@ export class EventEmitter<T> extends Emitter<T> {
         return new EventEmitter(listen);
     }
 	/**
+	 * Creates a chainable emitter that 
 	 * **Experimental**: May change in future revisions
-	 * Note: potential leak - This link will remain subscribed to the parent
-	 * until it emits, regardless of subscriptions to this link.
+	 * Note: only listens to the parent while at least one downstream subscription is present
 	 * @param notifier 
 	 * @returns 
 	 */
 	once() {
-		const { emit, listen } = createListenable<T>();
-		const unsub = this.apply(v => {
-			unsub();
-			emit(v);
-		});
+		let parentUnsubscribe: UnsubscribeFunc | null = null;
+		let completed = false;
+
+		const clear = () => {
+			if (parentUnsubscribe) {
+				parentUnsubscribe();
+				parentUnsubscribe = null;
+			}
+		};
+		
+		const { emit, listen } = createListenable<T>(
+			() => {
+				if (completed) return;
+				parentUnsubscribe = this.apply(v => {
+					completed = true;
+					clear();
+					emit(v);
+				});
+			},
+			clear
+		);
+		
 		return new EventEmitter(listen);
+	}
+
+	delay(ms: number) {
+		return new EventEmitter(this.transform((value, emit) => {
+			setTimeout(() => emit(value), ms)
+		}));
 	}
 
 	scan<S>(updater: (state: S, value: T) => S, initial: S): EventEmitter<S> {
@@ -219,46 +241,117 @@ export class EventEmitter<T> extends Emitter<T> {
 
 	/**
 	 * **Experimental**: May change in future revisions
-	 * Note: potential leak - This link will remain subscribed to the parent
-	 * until emission limit is reached, regardless of subscriptions to this link.
-	 * @param notifier 
+	 * Note: only listens to the notifier while at least one downstream subscription is present
+	 * @param limit
 	 * @returns 
 	 */
 	take(limit: number) {
-		const { emit, listen } = createListenable<T>();
+		let sourceUnsub: UnsubscribeFunc | null = null;
 		let count = 0;
+		let completed = false;
 		
-		const unsub = this.apply(v => {
-			if (count < limit) {
-				emit(v);
-				count++;
-				if (count >= limit) {
-					unsub();
+		const { emit, listen } = createListenable<T>(
+			() => {
+				if (completed) return;
+				
+				if (!sourceUnsub) {
+					sourceUnsub = this.apply(v => {
+						if (count < limit) {
+							emit(v);
+							count++;
+							if (count >= limit) {
+								completed = true;
+								if (sourceUnsub) {
+									sourceUnsub();
+									sourceUnsub = null;
+								}
+							}
+						}
+					});
+				}
+			},
+			() => {
+				if (sourceUnsub) {
+					sourceUnsub();
+					sourceUnsub = null;
 				}
 			}
-		});
+		);
 		
 		return new EventEmitter(listen);
 	}
 
 	/**
 	 * **Experimental**: May change in future revisions
-	 * Note: potential leak - This link will remain subscribed to the notifier
-	 * until it emits, regardless of subscriptions to this link.
+	 * Note: only listens to the notifier while at least one downstream subscription is present
 	 * @param notifier 
 	 * @returns 
 	 */
-	takeUntil(notifier: Emitter<any>): Emitter<T> {
-		const { emit, listen } = createListenable<T>();	
-		const unsub = this.apply(v => {
-			emit(v);
-		});		
-		const unsubNotifier = notifier.apply(() => {
-			unsub();
-			unsubNotifier();
-		});
+	takeUntil(notifier: Emitter<any>) {
+		let parentUnsubscribe: UnsubscribeFunc | null = null;
+		let notifierUnsub: UnsubscribeFunc | null = null;
+		let completed = false;
+		const clear = () => {
+			if (parentUnsubscribe) {
+				parentUnsubscribe();
+				parentUnsubscribe = null;
+			}
+			if (notifierUnsub) {
+				notifierUnsub();
+				notifierUnsub = null;
+			}
+		};
 		
-		return new EventEmitter<T>(listen);
+		const { emit, listen } = createListenable<T>(
+			() => {
+				if (completed) return;
+				parentUnsubscribe = this.apply(emit);
+				const handler = () => {
+					completed = true;
+					clear();
+				};
+				notifierUnsub = "subscribe" in notifier
+					? notifier.subscribe(handler)
+					: notifier.listen(handler);
+			},
+			clear
+		);
+		
+		return new EventEmitter(listen);
+	}
+
+	/**
+	 * Creates a chainable emitter that forwards its parent's emissions while the predicate returns true
+	 * Disconnects from the parent and becomes inert when the predicate returns false
+	 * @param predicate Callback to determine whether to keep forwarding
+	 */
+	takeWhile(predicate: (value: T) => boolean) {
+		let parentUnsubscribe: UnsubscribeFunc | null = null;
+		let completed = false;
+
+		const clear = () => {
+			if (parentUnsubscribe) {
+				parentUnsubscribe();
+				parentUnsubscribe = null;
+			}
+		};
+		
+		const { emit, listen } = createListenable<T>(
+			() => {
+				if (completed) return;
+				parentUnsubscribe = this.apply(v => {
+					if (predicate(v)) {
+						emit(v);
+					} else {
+						completed = true;
+						clear();
+					}
+				});
+			},
+			clear
+		);
+		
+		return new EventEmitter(listen);
 	}
 
 	/**
@@ -273,6 +366,12 @@ export class EventEmitter<T> extends Emitter<T> {
 			return this.onListen(handle);
 		});
 	}
+
+	/**
+	 * Creates a chainable emitter that forwards its parent's emissions, and
+	 * immediately emits the latest value to new subscribers
+	 * @returns 
+	 */
 	cached() {
 		let cache: null | {value: T} = null;
 		let unsub: null | UnsubscribeFunc = null;
@@ -292,75 +391,7 @@ export class EventEmitter<T> extends Emitter<T> {
 			return listen(handler);
 		})
 	}
-	/**
-	 * Creates a chainable emitter that applies arbitrary transformation to values emitted by its parent
-	 * @param mapFunc 
-	 * @returns Listenable: emits transformed values
-	 */
-	map<R>(mapFunc: (value: T) => R): EventEmitter<R> {
-		const listen = this.transform<R>(
-			(value, emit) => emit(mapFunc(value))
-		)
-		return new EventEmitter(listen);
-	}
-	/**
-	 * Creates a chainable emitter that selectively forwards emissions along the chain
-	 * @param check Function that takes an emitted value and returns true if the emission should be forwarded along the chain
-	 * @returns Listenable: emits values that pass the filter
-	 */
-	filter(check: (value: T) => boolean): EventEmitter<T> {
-		const listen = this.transform<T>(
-			(value, emit) => check(value) && emit(value)
-		)
-		return new EventEmitter<T>(listen);
-	}
-	/**
-	 * Creates a chainable emitter that discards emitted values that are the same as the last value emitted by the new emitter
-	 * @param compare Optional function that takes the previous and next values and returns true if they should be considered equal
-	 * 
-	 * If no `compare` function is provided, values will be compared via `===`
-	 * @returns Listenable: emits non-repeating values
-	 */
-	dedupe(compare?: (a: T, b: T) => boolean): EventEmitter<T> {
-		let previous: null | { value: T; } = null;
-		const listen = this.transform(
-			(value, emit) => {
-				if (
-					!previous || (
-						compare
-							? !compare(previous.value, value)
-							: (previous.value !== value)
-					)
-				) {
-					emit(value);
-					previous = { value };
-				}
 
-			}
-		)
-		return new EventEmitter<T>(listen);
-	}
-	
-	/**
-	 * Creates a chainable emitter that mirrors emissions from the parent emitter, invoking the provided callback `cb` as a side effect for each emission.  
-	 * 
-	 * The callback `cb` is called exactly once per parent emission, regardless of how many listeners are attached to the returned emitter.
-	 * All listeners attached to the returned emitter receive the same values as the parent emitter.
-	 * 
-	 * *Note*, the side effect `cb` is only invoked when there is at least one listener attached to the returned emitter
-	 * 
-	 * @param cb A function to be called as a side effect for each value emitted by the parent emitter.
-	 * @returns A new emitter that forwards all values from the parent, invoking `cb` as a side effect.
-	 */
-	tap(cb: Handler<T>): EventEmitter<T> {
-		const listen = this.transform(
-			(value, emit) => {
-				cb(value);
-				emit(value);
-			}
-		)
-		return new EventEmitter<T>(listen);
-	}
 }
 
 /**
@@ -435,4 +466,15 @@ export function interval(t: number | {asMilliseconds: number}) {
 		() => clearInterval(intervalId!),
 	);
 	return new EventEmitter(listen);
+}
+
+export function timeoutx(t: number | {asMilliseconds: number}) {
+	return interval(t).once().map(() => {});
+}
+
+export function timeout(t: number | {asMilliseconds: number}) {
+    const ms = typeof t === "number" ? t : t.asMilliseconds;
+    const {emit, listen} = createListenable<void>();
+	setTimeout(emit, ms);
+    return new EventEmitter(listen);
 }
