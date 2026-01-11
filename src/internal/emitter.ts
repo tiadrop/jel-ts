@@ -2,7 +2,7 @@ type Handler<T> = (value: T) => void;
 export type ListenFunc<T> = (handler: Handler<T>) => UnsubscribeFunc;
 export type UnsubscribeFunc = () => void;
 
-type Emitter<T> = {
+export type Listenable<T> = {
 	subscribe: (callback: (value: T) => void) => UnsubscribeFunc;
 } | {
 	listen: (callback: (value: T) => void) => UnsubscribeFunc;
@@ -287,7 +287,7 @@ export class EventEmitter<T> {
 	 * @param notifier 
 	 * @returns 
 	 */
-	takeUntil(notifier: Emitter<any>) {
+	takeUntil(notifier: Listenable<any>) {
 		let parentUnsubscribe: UnsubscribeFunc | null = null;
 		let notifierUnsub: UnsubscribeFunc | null = null;
 		let completed = false;

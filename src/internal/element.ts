@@ -1,6 +1,6 @@
-import { UnsubscribeFunc } from "./emitter.js";
+import { Listenable, UnsubscribeFunc } from "./emitter.js";
 import { attribsProxy, eventsProxy, styleProxy } from "./proxy";
-import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, EventsAccessor, ReactiveSource, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types";
+import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, EventsAccessor, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types";
 import { entityDataSymbol, isContent, isJelEntity } from "./util";
 
 const elementWrapCache = new WeakMap<HTMLElement, DomEntity<any>>();
@@ -151,7 +151,7 @@ type PropertyListener = {
     unsubscribe: UnsubscribeFunc | null;
 }
 
-function isReactiveSource(value: any): value is ReactiveSource<any> {
+function isReactiveSource(value: any): value is Listenable<any> {
     return typeof value == "object" && value && ("listen" in value || "subscribe" in value);
 }
 
@@ -175,7 +175,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             content: {},
         };
 
-        function addListener(type: keyof typeof listeners, prop: string, source: ReactiveSource<any>) {
+        function addListener(type: keyof typeof listeners, prop: string, source: Listenable<any>) {
             const set = {
                 style: (v: any) => element.style[prop as CSSProperty] = v,
                 cssVariable: (v: any) => setCSSVariable(prop, v),
@@ -223,9 +223,9 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
         }
 
 
-        function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | ReactiveSource<CSSValue>): void
+        function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | Listenable<CSSValue>): void
         function setStyle(prop: keyof StylesDescriptor): string
-        function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | ReactiveSource<CSSValue>) {
+        function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | Listenable<CSSValue>) {
             if (listeners.style[prop]) removeListener("style", prop);
             if (typeof value == "object" && value) {
                 if ("listen" in value || "subscribe" in value) {
@@ -305,7 +305,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                     return child;
                 }) as DOMContent;
             },
-            set content(v: DOMContent | ReactiveSource<DOMContent>) {
+            set content(v: DOMContent | Listenable<DOMContent>) {
                 if (listeners.content?.[""]) removeListener("content", "");
                 if (isReactiveSource(v)) {
                     addListener("content", "", v);
