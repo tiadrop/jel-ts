@@ -1,16 +1,16 @@
+import { type ClassAccessor } from "./element";
 import { EventEmitter, UnsubscribeFunc } from "./emitter";
 import { entityDataSymbol } from "./util";
 
-export type ElementClassDescriptor = string | Record<string, boolean | undefined> | undefined | ElementClassDescriptor[];
+export type ElementClassDescriptor = string | Record<string, boolean | Listenable<boolean> | undefined> | undefined | ElementClassDescriptor[];
 export type DOMContent = number | null | string | Element | JelEntity<object> | Text | DOMContent[];
 export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>>;
 
-export type ReactiveSource<T> = ({
-    listen: (handler: (value: T) => void) => UnsubscribeFunc;
+export type Listenable<T> = {
+    subscribe: (callback: (value: T) => void) => UnsubscribeFunc;
 } | {
-    subscribe: (handler: (value: T) => void) => UnsubscribeFunc;
-})
-
+    listen: (callback: (value: T) => void) => UnsubscribeFunc;
+}
 export type CSSValue = string | number | null | HexCodeContainer;
 export type CSSProperty = keyof StylesDescriptor;
 
@@ -24,13 +24,13 @@ export type StylesDescriptor = {
     [K in keyof CSSStyleDeclaration as [
         K,
         CSSStyleDeclaration[K]
-    ] extends [string, string] ? K : never]+?: CSSValue | ReactiveSource<CSSValue>
+    ] extends [string, string] ? K : never]+?: CSSValue | Listenable<CSSValue>
 }
 
-export type SetStyleFunc = ((property: CSSProperty, value: CSSValue | ReactiveSource<CSSValue>) => void);
+export type SetStyleFunc = ((property: CSSProperty, value: CSSValue | Listenable<CSSValue>) => void);
 
 export type SetGetStyleFunc = SetStyleFunc
-& ((property: CSSProperty) => string | ReactiveSource<CSSValue>);
+& ((property: CSSProperty) => string | Listenable<CSSValue>);
 
 export type StyleAccessor = ((styles: StylesDescriptor) => void)
 & StylesDescriptor
@@ -55,11 +55,11 @@ export type ElementDescriptor<Tag extends string> = {
         event: HTMLElementEventMap[E]
     ) => void};
     style?: StylesDescriptor;
-    cssVariables?: Record<string, CSSValue | ReactiveSource<CSSValue>>;
+    cssVariables?: Record<string, CSSValue | Listenable<CSSValue>>;
 } & (Tag extends TagWithValue ? {
     value?: string | number;
 } : {}) & (Tag extends ContentlessTag ? {} : {
-    content?: DOMContent | ReactiveSource<DOMContent>;
+    content?: DOMContent | Listenable<DOMContent>;
 }) & (Tag extends TagWithSrc ? {
     src?: string;
 } : {}) & (Tag extends TagWithHref ? {
@@ -75,14 +75,14 @@ export type ElementDescriptor<Tag extends string> = {
 
 type ElementAPI<T extends HTMLElement> = {
     readonly element: T;
-    readonly classes: DOMTokenList;
+    readonly classes: ClassAccessor;
     readonly attribs: {
         [key: string]: string | null;
     },
     readonly events: EventsAccessor;
     readonly style: StyleAccessor;
-    setCSSVariable(variableName: string, value: CSSValue | ReactiveSource<CSSValue>): void;
-    setCSSVariable(table: Record<string, CSSValue | ReactiveSource<CSSValue>>): void;
+    setCSSVariable(variableName: string, value: CSSValue | Listenable<CSSValue>): void;
+    setCSSVariable(table: Record<string, CSSValue | Listenable<CSSValue>>): void;
     qsa(selector: string): (Element | DomEntity<HTMLElement>)[];
     remove(): void;
     getRect(): DOMRect;
@@ -97,7 +97,7 @@ type ElementAPI<T extends HTMLElement> = {
     T extends ContentlessElement ? {} : {
         append(...content: DOMContent[]): void;
         innerHTML: string;
-        content: DOMContent | ReactiveSource<DOMContent>;
+        content: DOMContent | Listenable<DOMContent>;
     }
 ) & (
     T extends HTMLElementTagNameMap[TagWithValue] ? {

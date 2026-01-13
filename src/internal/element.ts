@@ -1,6 +1,6 @@
-import { Listenable, UnsubscribeFunc } from "./emitter.js";
+import { UnsubscribeFunc } from "./emitter.js";
 import { attribsProxy, eventsProxy, styleProxy } from "./proxy";
-import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, EventsAccessor, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types";
+import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, EventsAccessor, Listenable, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types";
 import { entityDataSymbol, isContent, isJelEntity } from "./util";
 
 const elementWrapCache = new WeakMap<HTMLElement, DomEntity<any>>();
@@ -40,7 +40,11 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
         }
         if (classes === undefined) return;
         Object.entries(classes).forEach(([className, state]) => {
-            if (state) applyClasses(className);
+            if (isReactiveSource(state)) {
+                ent.classes.toggle(className, state);
+            } else if (state) {
+                applyClasses(className);
+            }
         });
     };
 
@@ -152,7 +156,10 @@ type PropertyListener = {
 }
 
 function isReactiveSource(value: any): value is Listenable<any> {
-    return typeof value == "object" && value && ("listen" in value || "subscribe" in value);
+    return typeof value == "object" && value && (
+        ("listen" in value && typeof value.listen == "function")
+        || ("subscribe" in value && typeof value.subscribe == "function")
+    );
 }
 
 function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
@@ -169,10 +176,12 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             style: Record<string, PropertyListener>;
             cssVariable: Record<string, PropertyListener>;
             content: Record<string, PropertyListener>;
+            class: Record<string, PropertyListener>;
         } = {
             style: {},
             cssVariable: {},
             content: {},
+            class: {},
         };
 
         function addListener(type: keyof typeof listeners, prop: string, source: Listenable<any>) {
@@ -182,7 +191,8 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 content: (v: any) => {
                     element.innerHTML = "";
                     recursiveAppend(element, v);
-                }
+                },
+                class: (v: any) => element.classList.toggle(prop, v),
             }[type];
             const subscribe = "subscribe" in source
                 ? () => source.subscribe(set)
@@ -373,10 +383,71 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 }
             },
             style: new Proxy<SetGetStyleFunc>(setStyle as any, styleProxy) as unknown as StyleAccessor,
-            classes: element.classList,
+            classes: new ClassAccessor(
+                element.classList,
+                (className, stream) => addListener("class", className, stream),
+                (classNames) => {
+                    classNames.forEach(c => {
+                        if (listeners.class[c]) removeListener("class", c);
+                    });
+                }
+            ),
             events: new Proxy(element, eventsProxy) as unknown as EventsAccessor
         };
         elementWrapCache.set(element, domEntity);
     }
     return elementWrapCache.get(element) as DomEntity<T>;
+}
+
+export class ClassAccessor {
+    constructor(
+        private classList: DOMTokenList,
+        private listen: (className: string, stream: Listenable<boolean>) => void,
+        private unlisten: (classNames: string[]) => void,
+    ) {}
+    add(...className: string[]) {
+        this.unlisten(className);
+        this.classList.add(...className);
+    }
+    remove(...className: string[]) {
+        this.unlisten(className);
+        this.classList.remove(...className);
+    }
+    toggle(className: string, value?: boolean): boolean
+    toggle(className: string, value: Listenable<boolean>): void
+    toggle(className: string, value?: boolean | Listenable<boolean>) {
+        this.unlisten([className]);
+        if (isReactiveSource(value)) {
+            this.listen(className, value);
+            return;
+        }
+        return this.classList.toggle(className, value);
+    }
+    contains(className: string) {
+        return this.classList.contains(className);
+    }
+    get length() {
+        return this.classList.length;
+    }
+    toString() {
+        return this.classList.toString();
+    }
+    replace(token: string, newToken: string) {
+        this.unlisten([token, newToken]);
+        this.classList.replace(token, newToken);
+    }
+    forEach(cb: (token: string, idx: number) => void) {
+        this.classList.forEach(cb);
+    }
+    map<R>(cb: (token: string, idx: number) => R) {
+        const result: R[] = [];
+        const entries = this.classList.entries();
+        let entry = entries.next();
+        while (!entry.done) {
+            const [idx, value] = entry.value;
+            result.push(cb(value, idx));
+            entry = entries.next();
+        }
+        return result;
+    }
 }

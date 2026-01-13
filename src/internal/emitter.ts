@@ -1,12 +1,8 @@
+import { Listenable } from "./types";
+
 type Handler<T> = (value: T) => void;
 export type ListenFunc<T> = (handler: Handler<T>) => UnsubscribeFunc;
 export type UnsubscribeFunc = () => void;
-
-export type Listenable<T> = {
-	subscribe: (callback: (value: T) => void) => UnsubscribeFunc;
-} | {
-	listen: (callback: (value: T) => void) => UnsubscribeFunc;
-}
 
 export class EventEmitter<T> {
 	constructor(protected onListen: ListenFunc<T>) {}
@@ -468,13 +464,19 @@ export function interval(t: number | {asMilliseconds: number}) {
 	return new EventEmitter(listen);
 }
 
-export function timeoutx(t: number | {asMilliseconds: number}) {
-	return interval(t).once().map(() => {});
-}
-
 export function timeout(t: number | {asMilliseconds: number}) {
     const ms = typeof t === "number" ? t : t.asMilliseconds;
-    const {emit, listen} = createListenable<void>();
-	setTimeout(emit, ms);
-    return new EventEmitter(listen);
+	const targetTime = Date.now() + ms;
+	let timeoutId: ReturnType<typeof setTimeout> | null = null;
+	const {emit, listen} = createListenable<void>(
+		() => {
+			const reminaingMs = targetTime - Date.now();
+			if (reminaingMs < 0) return;
+			timeoutId = setTimeout(emit, reminaingMs);
+		},
+		() => {
+			clearTimeout(timeoutId!);
+		}
+	);
+	return new EventEmitter(listen);
 }

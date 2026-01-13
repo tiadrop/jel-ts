@@ -42,7 +42,6 @@ body.append([
         ))
     )
 ])
-
 ```
 
 ## `DOMContent`
@@ -141,20 +140,33 @@ For RxJS users, events can be observed with `fromEvent(element.events, "mousemov
 
 ## Reactive styles
 
-Style properties can be emitter subscriptions:
+Style properties, content and class presence can be emitter subscriptions:
 
 ```ts
 const mousePosition$ = $(document.body).events.mousemove
     .map(ev => ({x: ev.clientX, y: ev.clientY}));
 
 const virtualCursor = $.div({
-    classes: "virtual-cursor",
+    classes: {
+        "virtual-cursor": true,
+        "near-top": mousePosition$.map(v => v.y < 100)
+    },
     style: {
         left: mousePosition$.map(v => v.x + "px"),
         top: mousePosition$.map(v => v.y + "px")
     }
 });
+
+virtualCursor.classes.toggle(
+    "near-left",
+    mousePosition$.map(v => v.x < 100>)
+);
+
+h1.content = websocket$
+    .filter(msg => msg.type == "title")
+    .map(msg => msg.text);
 ```
+Removing an element from the page will unsubscribe from any attached stream, and resubscribe if subsequently appended.
 
 Emitters for this purpose can be Jel events, [@xtia/timeline](https://github.com/tiadrop/timeline) progressions, RxJS Observables or any object with either `subscribe()` or `listen()` that returns teardown logic.
 
