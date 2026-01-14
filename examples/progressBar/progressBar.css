@@ -13,8 +13,6 @@
     left: 0;
     top: 0;
     bottom: 0;
-    --fill: 0;
-    width: calc(var(--fill) * 100%);
     background: currentColor;
     transition: 50ms width ease-out;
 }

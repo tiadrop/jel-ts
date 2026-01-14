@@ -1,8 +1,8 @@
-import { DOMContent, ElementDescriptor, JelEntity } from "./types";
+import { DOMContent, ElementDescriptor, EmitterLike, HTMLTag, JelEntity } from "./types";
 
 export const entityDataSymbol = Symbol("jelComponentData");
 
-export const isContent = (value: DOMContent | ElementDescriptor<string> | undefined): value is DOMContent => {
+export const isContent = <T extends HTMLTag>(value: DOMContent | ElementDescriptor<T> | undefined): value is DOMContent => {
     if (value === undefined) return false;
     return typeof value == "string"
     || typeof value == "number"
@@ -40,3 +40,10 @@ export function createEntity<
         },
     }) as JelEntity<API>;
 };
+
+export function isReactiveSource(value: any): value is EmitterLike<any> {
+    return typeof value == "object" && value && (
+        ("listen" in value && typeof value.listen == "function")
+        || ("subscribe" in value && typeof value.subscribe == "function")
+    );
+}

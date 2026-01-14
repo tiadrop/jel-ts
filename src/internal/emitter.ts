@@ -1,6 +1,8 @@
-import { Listenable } from "./types";
+import { EmitterLike } from "./types";
+import { isReactiveSource } from "./util";
 
 type Handler<T> = (value: T) => void;
+
 export type ListenFunc<T> = (handler: Handler<T>) => UnsubscribeFunc;
 export type UnsubscribeFunc = () => void;
 
@@ -10,16 +12,10 @@ export class EventEmitter<T> {
 	protected transform<R = T>(
 		handler: (value: T, emit: (value: R) => void) => void
 	) {
-		let parentUnsubscribe: UnsubscribeFunc | null = null;
-		const parentListen = this.onListen;
 		const {emit, listen} = createListenable<R>(
-			() => parentUnsubscribe = parentListen(value => {
+			() => this.onListen(value => {
 				handler(value, emit);
 			}),
-			() => {
-				parentUnsubscribe!();
-				parentUnsubscribe = null;
-			}
 		);
 		return listen;
 	}
@@ -201,8 +197,8 @@ export class EventEmitter<T> {
 					clear();
 					emit(v);
 				});
+				return clear;
 			},
-			clear
 		);
 		
 		return new EventEmitter(listen);
@@ -265,13 +261,8 @@ export class EventEmitter<T> {
 						}
 					});
 				}
-			},
-			() => {
-				if (sourceUnsub) {
-					sourceUnsub();
-					sourceUnsub = null;
-				}
-			}
+				return sourceUnsub
+			}			
 		);
 		
 		return new EventEmitter(listen);
@@ -283,19 +274,13 @@ export class EventEmitter<T> {
 	 * @param notifier 
 	 * @returns 
 	 */
-	takeUntil(notifier: Listenable<any>) {
+	takeUntil(notifier: EmitterLike<any>) {
 		let parentUnsubscribe: UnsubscribeFunc | null = null;
 		let notifierUnsub: UnsubscribeFunc | null = null;
 		let completed = false;
 		const clear = () => {
-			if (parentUnsubscribe) {
-				parentUnsubscribe();
-				parentUnsubscribe = null;
-			}
-			if (notifierUnsub) {
-				notifierUnsub();
-				notifierUnsub = null;
-			}
+			parentUnsubscribe?.();
+			notifierUnsub?.();
 		};
 		
 		const { emit, listen } = createListenable<T>(
@@ -309,8 +294,8 @@ export class EventEmitter<T> {
 				notifierUnsub = "subscribe" in notifier
 					? notifier.subscribe(handler)
 					: notifier.listen(handler);
+				return clear;
 			},
-			clear
 		);
 		
 		return new EventEmitter(listen);
@@ -322,15 +307,8 @@ export class EventEmitter<T> {
 	 * @param predicate Callback to determine whether to keep forwarding
 	 */
 	takeWhile(predicate: (value: T) => boolean) {
-		let parentUnsubscribe: UnsubscribeFunc | null = null;
+		let parentUnsubscribe: UnsubscribeFunc | undefined;
 		let completed = false;
-
-		const clear = () => {
-			if (parentUnsubscribe) {
-				parentUnsubscribe();
-				parentUnsubscribe = null;
-			}
-		};
 		
 		const { emit, listen } = createListenable<T>(
 			() => {
@@ -340,11 +318,12 @@ export class EventEmitter<T> {
 						emit(v);
 					} else {
 						completed = true;
-						clear();
+						parentUnsubscribe!();
+						parentUnsubscribe = undefined;
 					}
 				});
-			},
-			clear
+				return () => parentUnsubscribe?.();
+			}
 		);
 		
 		return new EventEmitter(listen);
@@ -370,17 +349,11 @@ export class EventEmitter<T> {
 	 */
 	cached() {
 		let cache: null | {value: T} = null;
-		let unsub: null | UnsubscribeFunc = null;
 		const {listen, emit} = createListenable<T>(
-			() => {
-				unsub = this.onListen((value => {
-					cache = { value };
-					emit(value);
-				}))
-			},
-			() => {
-				unsub!();
-			}
+			() => this.onListen((value => {
+				cache = { value };
+				emit(value);
+			}))
 		);
 		return new EventEmitter<T>(handler => {
 			if (cache) handler(cache.value);
@@ -430,12 +403,13 @@ export function createEventSource<T>(initialHandler?: Handler<T>) {
     }
 }
 
-export function createListenable<T>(onAddFirst?: () => void, onRemoveLast?: () => void) {
+export function createListenable<T>(sourceListen?: () => UnsubscribeFunc | undefined) {
 	const handlers: {fn: (v: T) => void}[] = [];
+	let onRemoveLast: undefined | UnsubscribeFunc;
 	const addListener = (fn: (v: T) => void): UnsubscribeFunc => {
 		const unique = {fn};
 		handlers.push(unique);
-		if (onAddFirst && handlers.length == 1) onAddFirst();
+		if (sourceListen && handlers.length == 1) onRemoveLast = sourceListen();
 		return () => {
 			const idx = handlers.indexOf(unique);
 			if (idx === -1) throw new Error("Handler already unsubscribed")
@@ -458,8 +432,8 @@ export function interval(t: number | {asMilliseconds: number}) {
 			intervalId = setInterval(() => {
 				emit(idx++);
 			}, typeof t == "number" ? t : t.asMilliseconds);
+			return () => clearInterval(intervalId!);
 		},
-		() => clearInterval(intervalId!),
 	);
 	return new EventEmitter(listen);
 }
@@ -473,10 +447,79 @@ export function timeout(t: number | {asMilliseconds: number}) {
 			const reminaingMs = targetTime - Date.now();
 			if (reminaingMs < 0) return;
 			timeoutId = setTimeout(emit, reminaingMs);
+			return () => clearTimeout(timeoutId!);
 		},
-		() => {
-			clearTimeout(timeoutId!);
-		}
 	);
 	return new EventEmitter(listen);
+}
+
+export class SubjectEmitter<T> extends EventEmitter<T> {
+	private emit: (value: T) => void;
+	private _value: T;
+	constructor(initial: T) {
+		const {emit, listen} = createListenable<T>();
+		super(h => {
+			h(this._value);
+			return listen(h);
+		});
+		this.emit = emit;
+		this._value = initial;
+	}
+
+	get value() {
+		return this._value;
+	}
+
+	next(value: T) {
+		this._value = value;
+		this.emit(value);
+	}
+}
+
+type EventSource<T> = {
+    on: (eventName: string, handler: (value: T) => unknown) => UnsubscribeFunc;
+} | {
+    addEventListener: (eventName: string, handler: (value: T) => void) => UnsubscribeFunc;
+} | {
+    addEventListener: (eventName: string, handler: (value: T) => void) => void;
+    removeEventListener: (eventName: string, handler: (value: T) => void) => void;
+}
+
+export function toEventEmitter<T>(source: EmitterLike<T>): EventEmitter<T>
+export function toEventEmitter<T>(source: EventSource<T>, eventName: string): EventEmitter<T>
+export function toEventEmitter<T>(source: EmitterLike<T> | EventSource<T>, eventName?: string): EventEmitter<T> {
+    if (source instanceof EventEmitter) return source;
+
+    if (eventName !== undefined) {
+        // addEL & removeEL
+        if ("removeEventListener" in source && "addEventListener" in source) {
+            return new EventEmitter((h) => {
+                source.addEventListener(eventName, h);
+                return () => source.removeEventListener(eventName, h);
+            })
+        }
+
+		// addEL => unsub
+        if ("addEventListener" in source) {
+            return new EventEmitter(h => {
+                return source.addEventListener(eventName, h);
+            });
+        }
+
+		// on => unsub
+        if ("on" in source) {
+            return new EventEmitter(h => {
+                return source.on(eventName, h);
+            });
+        }
+    }
+
+	if (isReactiveSource(source)) {
+        const subscribe: ListenFunc<T> = "subscribe" in source
+            ? (h: any) => source.subscribe(h)
+            : (h: any) => source.listen(h);
+        return new EventEmitter(subscribe);
+    }
+
+	throw new Error("Invalid event source");
 }

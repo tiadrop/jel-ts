@@ -1,7 +1,7 @@
 import { UnsubscribeFunc } from "./emitter.js";
 import { attribsProxy, eventsProxy, styleProxy } from "./proxy";
-import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, EventsAccessor, Listenable, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types";
-import { entityDataSymbol, isContent, isJelEntity } from "./util";
+import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, EventsAccessor, HTMLTag, EmitterLike, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types";
+import { entityDataSymbol, isContent, isJelEntity, isReactiveSource } from "./util";
 
 const elementWrapCache = new WeakMap<HTMLElement, DomEntity<any>>();
 
@@ -19,13 +19,13 @@ const recursiveAppend = (parent: HTMLElement, c: DOMContent) => {
     parent.append(c);
 };
 
-function createElement<Tag extends keyof HTMLElementTagNameMap>(
+function createElement<Tag extends HTMLTag>(
     tag: Tag,
-    descriptor: Partial<ElementDescriptor<Tag>> | DOMContent = {}
+    descriptor: ElementDescriptor<Tag> | DOMContent = {}
 ): DomEntity<HTMLElementTagNameMap[Tag]> {
-    if (isContent(descriptor)) return createElement(tag, {
+    if (isContent(descriptor)) descriptor = {
         content: descriptor,
-    } as any);
+    } as ElementDescriptor<Tag>;
 
     const domElement = document.createElement(tag);
     const ent = getWrappedElement(domElement);
@@ -82,6 +82,8 @@ function createElement<Tag extends keyof HTMLElementTagNameMap>(
         );
     }
 
+    if (descriptor.init) descriptor.init(ent);
+
     return ent;
 };
 
@@ -111,8 +113,8 @@ export const $ = new Proxy(createElement, {
         });
         return create(tagName as any, descriptor);
     },
-    get(create, tagName: keyof HTMLElementTagNameMap) {
-        return (descriptorOrContent: ElementDescriptor<string> | DOMContent) => {
+    get(create, tagName: HTMLTag) {
+        return (descriptorOrContent: ElementDescriptor<HTMLTag> | DOMContent) => {
             return create(tagName, descriptorOrContent);
         };
     }
@@ -155,13 +157,6 @@ type PropertyListener = {
     unsubscribe: UnsubscribeFunc | null;
 }
 
-function isReactiveSource(value: any): value is Listenable<any> {
-    return typeof value == "object" && value && (
-        ("listen" in value && typeof value.listen == "function")
-        || ("subscribe" in value && typeof value.subscribe == "function")
-    );
-}
-
 function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
     if (!elementWrapCache.has(element)) {
         const setCSSVariable = (k: string, v: any) => {
@@ -184,7 +179,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             class: {},
         };
 
-        function addListener(type: keyof typeof listeners, prop: string, source: Listenable<any>) {
+        function addListener(type: keyof typeof listeners, prop: string, source: EmitterLike<any>) {
             const set = {
                 style: (v: any) => element.style[prop as CSSProperty] = v,
                 cssVariable: (v: any) => setCSSVariable(prop, v),
@@ -206,7 +201,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 elementMutationMap.set(element, {
                     add: () => {
                         Object.values(listeners).forEach(group => {
-                            Object.values(group).forEach(l => l.unsubscribe = l.subscribe?.());
+                            Object.values(group).forEach(l => l.unsubscribe = l.subscribe());
                         });
                     },
                     remove: () => {
@@ -233,9 +228,9 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
         }
 
 
-        function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | Listenable<CSSValue>): void
+        function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | EmitterLike<CSSValue>): void
         function setStyle(prop: keyof StylesDescriptor): string
-        function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | Listenable<CSSValue>) {
+        function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | EmitterLike<CSSValue>) {
             if (listeners.style[prop]) removeListener("style", prop);
             if (typeof value == "object" && value) {
                 if ("listen" in value || "subscribe" in value) {
@@ -315,7 +310,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                     return child;
                 }) as DOMContent;
             },
-            set content(v: DOMContent | Listenable<DOMContent>) {
+            set content(v: DOMContent | EmitterLike<DOMContent>) {
                 if (listeners.content?.[""]) removeListener("content", "");
                 if (isReactiveSource(v)) {
                     addListener("content", "", v);
@@ -402,7 +397,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
 export class ClassAccessor {
     constructor(
         private classList: DOMTokenList,
-        private listen: (className: string, stream: Listenable<boolean>) => void,
+        private listen: (className: string, stream: EmitterLike<boolean>) => void,
         private unlisten: (classNames: string[]) => void,
     ) {}
     add(...className: string[]) {
@@ -414,8 +409,8 @@ export class ClassAccessor {
         this.classList.remove(...className);
     }
     toggle(className: string, value?: boolean): boolean
-    toggle(className: string, value: Listenable<boolean>): void
-    toggle(className: string, value?: boolean | Listenable<boolean>) {
+    toggle(className: string, value: EmitterLike<boolean>): void
+    toggle(className: string, value?: boolean | EmitterLike<boolean>) {
         this.unlisten([className]);
         if (isReactiveSource(value)) {
             this.listen(className, value);

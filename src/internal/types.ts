@@ -2,11 +2,13 @@ import { type ClassAccessor } from "./element";
 import { EventEmitter, UnsubscribeFunc } from "./emitter";
 import { entityDataSymbol } from "./util";
 
-export type ElementClassDescriptor = string | Record<string, boolean | Listenable<boolean> | undefined> | undefined | ElementClassDescriptor[];
+export type ElementClassDescriptor = string | Record<string, boolean | EmitterLike<boolean> | undefined> | undefined | ElementClassDescriptor[];
 export type DOMContent = number | null | string | Element | JelEntity<object> | Text | DOMContent[];
 export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>>;
 
-export type Listenable<T> = {
+export type HTMLTag = keyof HTMLElementTagNameMap;
+
+export type EmitterLike<T> = {
     subscribe: (callback: (value: T) => void) => UnsubscribeFunc;
 } | {
     listen: (callback: (value: T) => void) => UnsubscribeFunc;
@@ -24,13 +26,13 @@ export type StylesDescriptor = {
     [K in keyof CSSStyleDeclaration as [
         K,
         CSSStyleDeclaration[K]
-    ] extends [string, string] ? K : never]+?: CSSValue | Listenable<CSSValue>
+    ] extends [string, string] ? K : never]+?: CSSValue | EmitterLike<CSSValue>
 }
 
-export type SetStyleFunc = ((property: CSSProperty, value: CSSValue | Listenable<CSSValue>) => void);
+export type SetStyleFunc = ((property: CSSProperty, value: CSSValue | EmitterLike<CSSValue>) => void);
 
 export type SetGetStyleFunc = SetStyleFunc
-& ((property: CSSProperty) => string | Listenable<CSSValue>);
+& ((property: CSSProperty) => string | EmitterLike<CSSValue>);
 
 export type StyleAccessor = ((styles: StylesDescriptor) => void)
 & StylesDescriptor
@@ -48,18 +50,19 @@ type TagWithType = "input" | "source" | "button";
 type TagWithName = 'input' | 'textarea' | 'select' | 'form';
 type ContentlessElement = HTMLElementTagNameMap[ContentlessTag];
 
-export type ElementDescriptor<Tag extends string> = {
+export type ElementDescriptor<Tag extends HTMLTag> = {
     classes?: ElementClassDescriptor;
     attribs?: Record<string, string | number | boolean>;
     on?: {[E in keyof HTMLElementEventMap]+?: (
         event: HTMLElementEventMap[E]
     ) => void};
     style?: StylesDescriptor;
-    cssVariables?: Record<string, CSSValue | Listenable<CSSValue>>;
+    cssVariables?: Record<string, CSSValue | EmitterLike<CSSValue>>;
+    init?: (entity: DomEntity<HTMLElementTagNameMap[Tag]>) => void;
 } & (Tag extends TagWithValue ? {
     value?: string | number;
 } : {}) & (Tag extends ContentlessTag ? {} : {
-    content?: DOMContent | Listenable<DOMContent>;
+    content?: DOMContent | EmitterLike<DOMContent>;
 }) & (Tag extends TagWithSrc ? {
     src?: string;
 } : {}) & (Tag extends TagWithHref ? {
@@ -81,8 +84,8 @@ type ElementAPI<T extends HTMLElement> = {
     },
     readonly events: EventsAccessor;
     readonly style: StyleAccessor;
-    setCSSVariable(variableName: string, value: CSSValue | Listenable<CSSValue>): void;
-    setCSSVariable(table: Record<string, CSSValue | Listenable<CSSValue>>): void;
+    setCSSVariable(variableName: string, value: CSSValue | EmitterLike<CSSValue>): void;
+    setCSSVariable(table: Record<string, CSSValue | EmitterLike<CSSValue>>): void;
     qsa(selector: string): (Element | DomEntity<HTMLElement>)[];
     remove(): void;
     getRect(): DOMRect;
@@ -97,7 +100,7 @@ type ElementAPI<T extends HTMLElement> = {
     T extends ContentlessElement ? {} : {
         append(...content: DOMContent[]): void;
         innerHTML: string;
-        content: DOMContent | Listenable<DOMContent>;
+        content: DOMContent | EmitterLike<DOMContent>;
     }
 ) & (
     T extends HTMLElementTagNameMap[TagWithValue] ? {
@@ -134,7 +137,7 @@ export type DomHelper = (
         /**
          * Creates an element of the specified tag
          */
-        <T extends keyof HTMLElementTagNameMap>(
+        <T extends HTMLTag>(
             tagName: T,
             descriptor: ElementDescriptor<T>
         ) => DomEntity<HTMLElementTagNameMap[T]>
@@ -143,7 +146,7 @@ export type DomHelper = (
         /**
          * Creates an element of the specified tag
          */
-        <T extends keyof HTMLElementTagNameMap>(
+        <T extends HTMLTag>(
             tagName: T,
         ) => DomEntity<HTMLElementTagNameMap[T]>
     )
@@ -151,7 +154,7 @@ export type DomHelper = (
         /**
          * Creates an element with ID and classes as specified by a selector-like string
          */
-        <T extends keyof HTMLElementTagNameMap>(
+        <T extends HTMLTag>(
             selector: `${T}#${string}`,
             content?: T extends ContentlessTag ? void : DOMContent
         ) => DomEntity<HTMLElementTagNameMap[T]>
@@ -160,7 +163,7 @@ export type DomHelper = (
         /**
          * Creates an element with ID and classes as specified by a selector-like string
          */
-        <T extends keyof HTMLElementTagNameMap>(
+        <T extends HTMLTag>(
             selector: `${T}.${string}`,
             content?: T extends ContentlessTag ? void : DOMContent
         ) => DomEntity<HTMLElementTagNameMap[T]>
@@ -172,12 +175,12 @@ export type DomHelper = (
         <T extends HTMLElement>(element: T) => DomEntity<T>
     )
     & {
-        [T in keyof HTMLElementTagNameMap]: (
+        [T in HTMLTag]: (
             descriptor: ElementDescriptor<T>
         ) => DomEntity<HTMLElementTagNameMap[T]>
     }
     & {
-        [T in keyof HTMLElementTagNameMap]: T extends ContentlessTag
+        [T in HTMLTag]: T extends ContentlessTag
             ? () => DomEntity<HTMLElementTagNameMap[T]>
             : (
                 content?: DOMContent
