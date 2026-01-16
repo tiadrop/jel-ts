@@ -476,18 +476,18 @@ export class SubjectEmitter<T> extends EventEmitter<T> {
 	}
 }
 
-type EventSource<T> = {
-    on: (eventName: string, handler: (value: T) => unknown) => UnsubscribeFunc;
+type EventSource<T, E extends string> = {
+    on: (eventName: E, handler: (value: T) => unknown) => UnsubscribeFunc;
 } | {
-    addEventListener: (eventName: string, handler: (value: T) => void) => UnsubscribeFunc;
+    addEventListener: (eventName: E, handler: (value: T) => void) => UnsubscribeFunc;
 } | {
-    addEventListener: (eventName: string, handler: (value: T) => void) => void;
-    removeEventListener: (eventName: string, handler: (value: T) => void) => void;
+    addEventListener: (eventName: E, handler: (value: T) => void) => void;
+    removeEventListener: (eventName: E, handler: (value: T) => void) => void;
 }
 
 export function toEventEmitter<T>(source: EmitterLike<T>): EventEmitter<T>
-export function toEventEmitter<T>(source: EventSource<T>, eventName: string): EventEmitter<T>
-export function toEventEmitter<T>(source: EmitterLike<T> | EventSource<T>, eventName?: string): EventEmitter<T> {
+export function toEventEmitter<T, E extends string>(source: EventSource<T, E>, eventName: E): EventEmitter<T>
+export function toEventEmitter<T, E extends string>(source: EmitterLike<T> | EventSource<T, E>, eventName?: E): EventEmitter<T> {
     if (source instanceof EventEmitter) return source;
 
     if (eventName !== undefined) {
