@@ -291,9 +291,7 @@ export class EventEmitter<T> {
 					completed = true;
 					clear();
 				};
-				notifierUnsub = "subscribe" in notifier
-					? notifier.subscribe(handler)
-					: notifier.listen(handler);
+				notifierUnsub = toEventEmitter(notifier).listen(handler);
 				return clear;
 			},
 		);
@@ -361,10 +359,22 @@ export class EventEmitter<T> {
 		})
 	}
 
+	/**
+	 * Creates a chainable emitter that forwards emissions from the parent and any of the provided emitters
+	 * @param emitters 
+	 */
+	or(...emitters: EmitterLike<T>[]): EmitterLike<T>
+	or<U>(...emitters: EmitterLike<U>[]): EmitterLike<T | U>
+	or(...emitters: EmitterLike<unknown>[]): EmitterLike<unknown> {
+		return new EventEmitter(handler => {
+			const unsubs = [this, ...emitters].map(e => toEventEmitter(e).listen(handler));
+			return () => unsubs.forEach(unsub => unsub());
+		})
+	}
 }
 
 /**
- * Creates a linked Emitter and emit() pair
+ * Creates a linked EventEmitter and emit() pair
  * @example
  * ```ts
  * function createForm(options?: { onsubmit?: (data: FormData) => void }) {
@@ -423,15 +433,14 @@ export function createListenable<T>(sourceListen?: () => UnsubscribeFunc | undef
 	};
 }
 
-
-export function interval(t: number | {asMilliseconds: number}) {
+export function interval(ms: number | {asMilliseconds: number}) {
 	let intervalId: ReturnType<typeof setInterval> | null = null;
 	let idx = 0;
 	const {emit, listen} = createListenable<number>(
 		() => {
 			intervalId = setInterval(() => {
 				emit(idx++);
-			}, typeof t == "number" ? t : t.asMilliseconds);
+			}, typeof ms == "number" ? ms : ms.asMilliseconds);
 			return () => clearInterval(intervalId!);
 		},
 	);
@@ -477,39 +486,51 @@ export class SubjectEmitter<T> extends EventEmitter<T> {
 }
 
 type EventSource<T, E extends string> = {
-    on: (eventName: E, handler: (value: T) => unknown) => UnsubscribeFunc;
+    on: (eventName: E, handler: (value: T) => void) => UnsubscribeFunc;
+} | {
+    on: (eventName: E, handler: (value: T) => void) => void | UnsubscribeFunc;
+    off: (eventName: E, handler: (value: T) => void) => void;
 } | {
     addEventListener: (eventName: E, handler: (value: T) => void) => UnsubscribeFunc;
 } | {
-    addEventListener: (eventName: E, handler: (value: T) => void) => void;
+    addEventListener: (eventName: E, handler: (value: T) => void) => void | UnsubscribeFunc;
     removeEventListener: (eventName: E, handler: (value: T) => void) => void;
 }
 
+/**
+ * Create an EventEmitter from an event source. Event sources can be RxJS observables, existing EventEmitters, or objects that
+ * provide a subscribe()/listen() => UnsubscribeFunc method.
+ * @param source 
+ */
 export function toEventEmitter<T>(source: EmitterLike<T>): EventEmitter<T>
 export function toEventEmitter<T, E extends string>(source: EventSource<T, E>, eventName: E): EventEmitter<T>
 export function toEventEmitter<T, E extends string>(source: EmitterLike<T> | EventSource<T, E>, eventName?: E): EventEmitter<T> {
     if (source instanceof EventEmitter) return source;
 
     if (eventName !== undefined) {
-        // addEL & removeEL
-        if ("removeEventListener" in source && "addEventListener" in source) {
-            return new EventEmitter((h) => {
-                source.addEventListener(eventName, h);
-                return () => source.removeEventListener(eventName, h);
-            })
-        }
-
-		// addEL => unsub
+        // addEL()
         if ("addEventListener" in source) {
+			if ("removeEventListener" in source && typeof source.removeEventListener == "function") {
+				return new EventEmitter(h => {
+					return source.addEventListener(eventName, h)
+					?? (() => source.removeEventListener(eventName, h));
+				})
+			}
             return new EventEmitter(h => {
-                return source.addEventListener(eventName, h);
+				return source.addEventListener(eventName, h) as UnsubscribeFunc;
             });
         }
 
-		// on => unsub
+		// on()
         if ("on" in source) {
+			if ("off" in source && typeof source.off == "function") {
+				return new EventEmitter(h => {
+					return source.on(eventName, h)
+					?? (() => source.off(eventName, h));
+				})
+			}
             return new EventEmitter(h => {
-                return source.on(eventName, h);
+				return source.on(eventName, h) as UnsubscribeFunc;
             });
         }
     }

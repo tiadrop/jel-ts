@@ -1,5 +1,5 @@
 import { SetGetStyleFunc, CSSProperty } from "./types";
-import { EventEmitter } from "./emitter"
+import { EventEmitter, toEventEmitter } from "./emitter"
 
 export const styleProxy: ProxyHandler<SetGetStyleFunc> = {
     get(style, prop: CSSProperty){
@@ -58,13 +58,6 @@ export const eventsProxy: ProxyHandler<HTMLElement> = {
             ) => element.removeEventListener(name, handler);
         }
 
-        const listen = (handler: (e: Event) => void) => {
-            const wrappedHandler = (event: Event) => handler(event);
-            element.addEventListener(key, wrappedHandler);
-            return () => {
-                element.removeEventListener(key, wrappedHandler);
-            }
-        };
-        return new EventEmitter(listen);
+        return toEventEmitter(element, key);
     }
 }
