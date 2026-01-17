@@ -95,7 +95,7 @@ type ElementAPI<T extends HTMLElement> = {
         eventId: E, handler: (
             this: ElementAPI<T>, data: HTMLElementEventMap[E]
         ) => void
-    ): void;
+    ): UnsubscribeFunc;
 } & (
     T extends ContentlessElement ? {} : {
         append(...content: DOMContent[]): void;

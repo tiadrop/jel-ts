@@ -256,9 +256,12 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 eventId: E,
                 handler: (data: HTMLElementEventMap[E]) => void,
             ) {
-                element.addEventListener(eventId, eventData => {
+                const fn = (eventData: HTMLElementEventMap[E]) => {
                     handler.call(domEntity, eventData);
-                });
+                };
+                element.addEventListener(eventId, fn);
+                return () => element.removeEventListener(eventId, fn);
+
             },
             append(...content: DOMContent[]) {
                 if (listeners.content?.[""]) removeListener("content", "");
