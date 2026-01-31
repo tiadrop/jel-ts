@@ -363,9 +363,9 @@ export class EventEmitter<T> {
 	 * Creates a chainable emitter that forwards emissions from the parent and any of the provided emitters
 	 * @param emitters 
 	 */
-	or(...emitters: EmitterLike<T>[]): EmitterLike<T>
-	or<U>(...emitters: EmitterLike<U>[]): EmitterLike<T | U>
-	or(...emitters: EmitterLike<unknown>[]): EmitterLike<unknown> {
+	or(...emitters: EmitterLike<T>[]): EventEmitter<T>
+	or<U>(...emitters: EmitterLike<U>[]): EventEmitter<T | U>
+	or(...emitters: EmitterLike<unknown>[]): EventEmitter<unknown> {
 		return new EventEmitter(handler => {
 			const unsubs = [this, ...emitters].map(e => toEventEmitter(e).listen(handler));
 			return () => unsubs.forEach(unsub => unsub());
@@ -513,7 +513,7 @@ export function toEventEmitter<T, E extends string>(source: EmitterLike<T> | Eve
 			if ("removeEventListener" in source && typeof source.removeEventListener == "function") {
 				return new EventEmitter(h => {
 					return source.addEventListener(eventName, h)
-					?? (() => source.removeEventListener(eventName, h));
+					|| (() => source.removeEventListener(eventName, h));
 				})
 			}
             return new EventEmitter(h => {
@@ -526,7 +526,7 @@ export function toEventEmitter<T, E extends string>(source: EmitterLike<T> | Eve
 			if ("off" in source && typeof source.off == "function") {
 				return new EventEmitter(h => {
 					return source.on(eventName, h)
-					?? (() => source.off(eventName, h));
+					|| (() => source.off(eventName, h));
 				})
 			}
             return new EventEmitter(h => {
