@@ -371,6 +371,14 @@ export class EventEmitter<T> {
 			return () => unsubs.forEach(unsub => unsub());
 		})
 	}
+
+	memo(): Memo<T | undefined>
+	memo(initial: T): Memo<T>
+	memo<U>(initial: U): Memo<T | U>
+	memo(initial?: unknown) {
+		return new Memo(this, initial);
+	}
+
 }
 
 /**
@@ -413,7 +421,7 @@ export function createEventSource<T>(initialHandler?: Handler<T>) {
     }
 }
 
-export function createListenable<T>(sourceListen?: () => UnsubscribeFunc | undefined) {
+function createListenable<T>(sourceListen?: () => UnsubscribeFunc | undefined) {
 	const handlers: {fn: (v: T) => void}[] = [];
 	let onRemoveLast: undefined | UnsubscribeFunc;
 	const addListener = (fn: (v: T) => void): UnsubscribeFunc => {
@@ -460,6 +468,26 @@ export function timeout(t: number | {asMilliseconds: number}) {
 		},
 	);
 	return new EventEmitter(listen);
+}
+
+class Memo<T> {
+	private _value: T;
+	private unsubscribeFunc: UnsubscribeFunc;
+	get value(){
+		return this._value
+	}
+	constructor(source: EmitterLike<T>, initial: T) {
+		this._value = initial;
+		const emitter = toEventEmitter(source);
+		this.unsubscribeFunc = emitter.listen(v => this._value = v);
+	}
+
+	dispose() {
+		this.unsubscribeFunc();
+		this.unsubscribeFunc = () => {
+			throw new Error("Memo object already disposed");
+		}
+	}
 }
 
 export class SubjectEmitter<T> extends EventEmitter<T> {
@@ -543,4 +571,58 @@ export function toEventEmitter<T, E extends string>(source: EmitterLike<T> | Eve
     }
 
 	throw new Error("Invalid event source");
+}
+
+
+
+function combineArray(emitters: EventEmitter<any>[]) {
+	let values: (undefined | {value: any})[] = Array.from({length: emitters.length});
+	const { emit, listen } = createListenable(() => {
+		const unsubFuncs = emitters.map((emitter, idx) => {
+			return emitter.listen(v => {
+				values[idx] = {value: v};
+				if (values.every(v => v !== undefined)) emit(values.map(vc => vc.value));
+			});
+		});
+		return () => unsubFuncs.forEach(f => f());
+	});
+	return new EventEmitter(listen);
+}
+
+function combineRecord(emitters: Record<string | symbol, EventEmitter<any>>) {
+    const keys = Object.keys(emitters);
+    let values: Record<string | symbol, (undefined | {value: any})> = {};
+    
+    const { emit, listen } = createListenable(() => {
+        const unsubFuncs = keys.map(key => {
+            return emitters[key].listen(v => {
+                values[key] = {value: v};
+                if (keys.every(k => values[k] !== undefined)) {
+					const record = Object.fromEntries(Object.entries(values).map(([k, vc]) => [k, vc!.value]));
+                    emit(record);
+                }
+            });
+        });
+        
+        return () => unsubFuncs.forEach(f => f());
+    });
+    
+    return new EventEmitter(listen);
+}
+
+
+type Dictionary<T> = Record<string | symbol, T>;
+
+type ExtractEmitterValue<T> = T extends EmitterLike<infer U> ? U : never;
+type CombinedRecord<T extends Dictionary<EmitterLike<any>>> = {
+    readonly [K in keyof T]: ExtractEmitterValue<T[K]>;
+}
+
+export function combineEmitters<U extends Dictionary<EmitterLike<any>>>(emitters: U): EventEmitter<CombinedRecord<U>>
+export function combineEmitters<U extends EmitterLike<any>[]>(emitters: [...U]): EventEmitter<{
+    [K in keyof U]: ExtractEmitterValue<U[K]>;
+}>
+export function combineEmitters(emitters: EmitterLike<any>[] | Dictionary<EmitterLike<any>>) {
+	if (Array.isArray(emitters)) return combineArray(emitters.map(toEventEmitter));
+	return combineRecord(Object.fromEntries(Object.entries(emitters).map(([k, e]) => [k, toEventEmitter(e)])));
 }
