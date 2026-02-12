@@ -47,6 +47,12 @@ export class EventEmitter<T> {
 		)
 		return new EventEmitter(listen);
 	}
+	mapAsync<R>(mapFunc: (value: T) => Promise<R>) {
+		const listen = this.transform<R>(
+			(value, emit) => mapFunc(value).then(emit)
+		);
+		return new EventEmitter(listen);
+	}
 	/**
 	 * Creates a chainable emitter that selectively forwards emissions along the chain
 	 * @param check Function that takes an emitted value and returns true if the emission should be forwarded along the chain
