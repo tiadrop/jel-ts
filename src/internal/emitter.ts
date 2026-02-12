@@ -287,11 +287,10 @@ export class EventEmitter<T> {
 			() => {
 				if (completed) return;
 				parentUnsubscribe = this.apply(emit);
-				const handler = () => {
+				notifierUnsub = toEventEmitter(notifier).listen(() => {
 					completed = true;
 					clear();
-				};
-				notifierUnsub = toEventEmitter(notifier).listen(handler);
+				});
 				return clear;
 			},
 		);
@@ -520,15 +519,15 @@ export class SubjectEmitter<T> extends EventEmitter<T> {
 }
 
 type EventSource<T, E extends string> = {
-    on: (eventName: E, handler: (value: T) => void) => UnsubscribeFunc;
+    on: (eventName: E, handler: Handler<T>) => UnsubscribeFunc;
 } | {
-    on: (eventName: E, handler: (value: T) => void) => void | UnsubscribeFunc;
-    off: (eventName: E, handler: (value: T) => void) => void;
+    on: (eventName: E, handler: Handler<T>) => void | UnsubscribeFunc;
+    off: (eventName: E, handler: Handler<T>) => void;
 } | {
-    addEventListener: (eventName: E, handler: (value: T) => void) => UnsubscribeFunc;
+    addEventListener: (eventName: E, handler: Handler<T>) => UnsubscribeFunc;
 } | {
-    addEventListener: (eventName: E, handler: (value: T) => void) => void | UnsubscribeFunc;
-    removeEventListener: (eventName: E, handler: (value: T) => void) => void;
+    addEventListener: (eventName: E, handler: Handler<T>) => void | UnsubscribeFunc;
+    removeEventListener: (eventName: E, handler: Handler<T>) => void;
 }
 
 /**
