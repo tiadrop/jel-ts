@@ -372,6 +372,12 @@ export class EventEmitter<T> {
 		})
 	}
 
+	then<R>(handler: (value: T) => R) {
+		return new Promise<R>(resolve => {
+			this.once().apply(v => resolve(handler(v)));
+		})
+	}
+
 	memo(): Memo<T | undefined>
 	memo(initial: T): Memo<T>
 	memo<U>(initial: U): Memo<T | U>
