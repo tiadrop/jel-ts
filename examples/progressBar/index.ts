@@ -1,5 +1,4 @@
-import { $, createEntity, ElementClassDescriptor } from "../../src/index";
-import { SubjectEmitter } from "../../src/internal/emitter";
+import { $, createEntity, ElementClassDescriptor, SubjectEmitter } from "../../src";
 
 export const progressBar = (spec: {
     value?: number;
@@ -28,6 +27,9 @@ export const progressBar = (spec: {
         },
         remove() {
             element.remove();
+        },
+        get classes() {
+            return element.classes;
         }
     };
 
