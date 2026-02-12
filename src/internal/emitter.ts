@@ -2,6 +2,16 @@ import { EmitterLike } from "./types";
 import { isReactiveSource } from "./util";
 
 type Handler<T> = (value: T) => void;
+type Period = {
+	asMilliseconds: number;
+} | {
+	asSeconds: number;
+}
+
+function periodAsMilliseconds(t: number | Period) {
+	if (typeof t == "number") return t;
+	return "asMilliseconds" in t ? t.asMilliseconds : (t.asSeconds * 1000);
+}
 
 export type ListenFunc<T> = (handler: Handler<T>) => UnsubscribeFunc;
 export type UnsubscribeFunc = () => void;
@@ -133,14 +143,21 @@ export class EventEmitter<T> {
 		return this;
 	}
 
-    debounce(ms: number) {
+	/**
+	 * Creates a chainable emitter that forwards the parent's last emission after a period of time in which the parent doesn't emit
+	 * @param ms Delay in milliseconds
+	 * @returns Debounced emitter
+	 */
+    debounce(ms: number): EventEmitter<T>
+	debounce(period: Period): EventEmitter<T>
+	debounce(t: number | Period) {
         let reset: null | (() => void) = null;
         const listen = this.transform((value, emit) => {
             reset?.();
             const timeout = setTimeout(() => {
                 reset = null;
                 emit(value);
-            }, ms);
+            }, periodAsMilliseconds(t));
             reset = () => {
                 reset = null;
                 clearTimeout(timeout);
@@ -149,11 +166,18 @@ export class EventEmitter<T> {
         return new EventEmitter(listen);
     }
 
-    throttle(ms: number) {
+	/**
+	 * Creates a chainable emitter that forwards the parent's emissions, with a minimum delay between emissions during which parent emssions are ignored
+	 * @param ms Delay in milliseconds
+	 * @returns Throttled emitter
+	 */
+    throttle(ms: number): EventEmitter<T>
+	throttle(period: Period): EventEmitter<T>
+	throttle(t: number | Period) {
         let lastTime = -Infinity;
         const listen = this.transform((value, emit) => {
             const now = performance.now();
-            if (now >= lastTime + ms) {
+            if (now >= lastTime + periodAsMilliseconds(t)) {
                 lastTime = now;
                 emit(value);
             }
@@ -210,9 +234,11 @@ export class EventEmitter<T> {
 		return new EventEmitter(listen);
 	}
 
-	delay(ms: number) {
+	delay(ms: number): EventEmitter<T>
+	delay(period: Period): EventEmitter<T>
+	delay(t: number | Period) {
 		return new EventEmitter(this.transform((value, emit) => {
-			setTimeout(() => emit(value), ms)
+			setTimeout(() => emit(value), periodAsMilliseconds(t));
 		}));
 	}
 
@@ -452,22 +478,26 @@ function createListenable<T>(sourceListen?: () => UnsubscribeFunc | undefined) {
 	};
 }
 
-export function interval(ms: number | {asMilliseconds: number}) {
+export function interval(ms: number): EventEmitter<number>
+export function interval(period: Period): EventEmitter<number>
+export function interval(t: number | Period) {
 	let intervalId: ReturnType<typeof setInterval> | null = null;
 	let idx = 0;
 	const {emit, listen} = createListenable<number>(
 		() => {
 			intervalId = setInterval(() => {
 				emit(idx++);
-			}, typeof ms == "number" ? ms : ms.asMilliseconds);
+			}, periodAsMilliseconds(t));
 			return () => clearInterval(intervalId!);
 		},
 	);
 	return new EventEmitter(listen);
 }
 
-export function timeout(t: number | {asMilliseconds: number}) {
-    const ms = typeof t === "number" ? t : t.asMilliseconds;
+export function timeout(ms: number): EventEmitter<void>
+export function timeout(period: Period): EventEmitter<void>
+export function timeout(t: number | Period) {
+    const ms = periodAsMilliseconds(t);
 	const targetTime = Date.now() + ms;
 	let timeoutId: ReturnType<typeof setTimeout> | null = null;
 	const {emit, listen} = createListenable<void>(
@@ -585,8 +615,6 @@ export function toEventEmitter<T, E extends string>(source: EmitterLike<T> | Eve
 
 	throw new Error("Invalid event source");
 }
-
-
 
 function combineArray(emitters: EventEmitter<any>[]) {
 	let values: (undefined | {value: any})[] = Array.from({length: emitters.length});
