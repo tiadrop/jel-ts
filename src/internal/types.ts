@@ -52,7 +52,7 @@ type ContentlessElement = HTMLElementTagNameMap[ContentlessTag];
 
 export type ElementDescriptor<Tag extends HTMLTag> = {
     classes?: ElementClassDescriptor;
-    attribs?: Record<string, string | number | boolean>;
+    attribs?: Record<string, string | number | boolean | undefined>;
     on?: {[E in keyof HTMLElementEventMap]+?: (
         event: HTMLElementEventMap[E]
     ) => void};
