@@ -538,8 +538,10 @@ type EventSource<T, E extends string> = {
  */
 export function toEventEmitter<T>(source: EmitterLike<T>): EventEmitter<T>
 export function toEventEmitter<T, E extends string>(source: EventSource<T, E>, eventName: E): EventEmitter<T>
-export function toEventEmitter<T, E extends string>(source: EmitterLike<T> | EventSource<T, E>, eventName?: E): EventEmitter<T> {
+export function toEventEmitter<T>(subscribe: ListenFunc<T>): EventEmitter<T>
+export function toEventEmitter<T, E extends string>(source: EmitterLike<T> | EventSource<T, E> | ListenFunc<T>, eventName?: E): EventEmitter<T> {
     if (source instanceof EventEmitter) return source;
+	if (typeof source == "function") return new EventEmitter(source);
 
     if (eventName !== undefined) {
         // addEL()
