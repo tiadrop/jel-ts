@@ -1,5 +1,6 @@
-import { type ClassAccessor } from "./element";
+import { ClassAccessor } from "./element";
 import { EventEmitter, UnsubscribeFunc } from "./emitter";
+import { EventsProxy } from "./proxy";
 import { entityDataSymbol } from "./util";
 
 export type ElementClassDescriptor = string | Record<string, boolean | EmitterLike<boolean> | undefined> | undefined | ElementClassDescriptor[];
@@ -82,7 +83,7 @@ type ElementAPI<T extends HTMLElement> = {
     readonly attribs: {
         [key: string]: string | null;
     },
-    readonly events: EventsAccessor;
+    readonly events: EventsProxy<HTMLElementEventMap>;
     readonly style: StyleAccessor;
     setCSSVariable(variableName: string, value: CSSValue | EmitterLike<CSSValue>): void;
     setCSSVariable(table: Record<string, CSSValue | EmitterLike<CSSValue>>): void;
@@ -183,8 +184,13 @@ export type DomHelper = (
         [T in HTMLTag]: T extends ContentlessTag
             ? () => DomEntity<HTMLElementTagNameMap[T]>
             : (
-                content?: DOMContent
-            ) => DomEntity<HTMLElementTagNameMap[T]>
+                ((
+                    content?: DOMContent
+                ) => DomEntity<HTMLElementTagNameMap[T]>)
+                & ((
+                    contentEmitter: EmitterLike<DOMContent>
+                ) => DomEntity<HTMLElementTagNameMap[T]>)
+            )
     }
 )
 
@@ -196,15 +202,21 @@ export type JelEntity<API extends object | void> = (API extends void ? {} : API)
     readonly [entityDataSymbol]: JelEntityData;
 };
 
-export type EventsAccessor = {
-    [K in keyof HTMLElementEventMap]: EventEmitter<HTMLElementEventMap[K]>;
-} & {
-    addEventListener<K extends keyof HTMLElementEventMap>(
-        eventName: K, 
-        listener: (event: HTMLElementEventMap[K]) => void
-    ): void;
-    removeEventListener<K extends keyof HTMLElementEventMap>(
-        eventName: K, 
-        listener: (event: HTMLElementEventMap[K]) => void
-    ): void;
+export type Handler<T> = (value: T) => void;
+export type Period = {
+	asMilliseconds: number;
+} | {
+	asSeconds: number;
+}
+
+export type EventSource<E, N> = {
+    on: (eventName: N, handler: Handler<E>) => UnsubscribeFunc;
+} | {
+    on: (eventName: N, handler: Handler<E>) => void | UnsubscribeFunc;
+    off: (eventName: N, handler: Handler<E>) => void;
+} | {
+    addEventListener: (eventName: N, handler: Handler<E>) => UnsubscribeFunc;
+} | {
+    addEventListener: (eventName: N, handler: Handler<E>) => void;
+    removeEventListener: (eventName: N, handler: Handler<E>) => void;
 };

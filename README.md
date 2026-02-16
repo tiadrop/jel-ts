@@ -130,15 +130,15 @@ showDialogue(["Hello ", $("span.green", "world")]);
 Event emitters can be chained:
 
 ```ts
-element.events.mousemove
+div.events.mousemove
 	.takeUntil(body.events.mousedown.filter(e => e.button === 1))
 	.map(ev => [ev.offsetX, ev.offsetY])
 	.apply(([x, y]) => console.log("mouse @ ", x, y));
 ```
 
-For RxJS users, events can be observed with `fromEvent(element.events, "mousemove")`.
+For RxJS users, events can be observed with `fromEvent(ent.element, "mousemove")`.
 
-## Reactive styles
+## Reactive properties
 
 Style properties, content and class presence can be emitter subscriptions:
 
@@ -165,6 +165,20 @@ virtualCursor.classes.toggle(
 h1.content = websocket$
     .filter(msg => msg.type == "title")
     .map(msg => msg.text);
+
+const searchInput = $("input.search");
+const searchResults$ = searchInput.events.input
+    .debounce(300)
+    .map(() => searchInput.value)
+    .filter(term => term.length >= 2)
+    .mapAsync(term => performSearch(term)); // Returns emitter of search results
+
+// Then use it reactively
+$.ul({
+    content: searchResults$.map(results => 
+        results.map(result => $.li(result.title))
+    )
+});
 ```
 Removing an element from the page will unsubscribe from any attached stream, and resubscribe if subsequently appended.
 

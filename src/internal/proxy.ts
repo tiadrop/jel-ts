@@ -1,4 +1,4 @@
-import { SetGetStyleFunc, CSSProperty } from "./types";
+import { SetGetStyleFunc, CSSProperty, EventSource } from "./types";
 import { EventEmitter, toEventEmitter } from "./emitter"
 
 export const styleProxy: ProxyHandler<SetGetStyleFunc> = {
@@ -43,21 +43,23 @@ export const attribsProxy: ProxyHandler<HTMLElement> = {
     },
 };
 
-export const eventsProxy: ProxyHandler<HTMLElement> = {
-    get: (element, key: keyof HTMLElementEventMap | "addEventListener" | "removeEventListener") => {
-        if (key == "addEventListener") {
-            return (
-                name: string,
-                handler: (ev: Event) => void
-            ) => element.addEventListener(name, handler);
-        }
-        if (key == "removeEventListener") {
-            return (
-                name: string,
-                handler: (ev: Event) => void
-            ) => element.removeEventListener(name, handler);
-        }
+export type EventsProxy<Map> = {
+    [K in keyof Map]: EventEmitter<Map[K]>;
+} & {
+    addEventListener<K extends keyof Map>(
+        eventName: K, 
+        listener: (event: Map[K]) => void
+    ): void;
+    removeEventListener<K extends keyof Map>(
+        eventName: K, 
+        listener: (event: Map[K]) => void
+    ): void;
+};
 
+const eventsProxyDefinition: ProxyHandler<EventSource<any, any>> = {
+    get: (element, key: string) => {
         return toEventEmitter(element, key);
     }
 }
+
+export const createEventsProxy = <Map>(source: EventSource<any, keyof Map>) => new Proxy(source, eventsProxyDefinition) as unknown as EventsProxy<Map>;

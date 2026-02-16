@@ -1,6 +1,6 @@
 import { UnsubscribeFunc } from "./emitter.js";
-import { attribsProxy, eventsProxy, styleProxy } from "./proxy";
-import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, EventsAccessor, HTMLTag, EmitterLike, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types";
+import { attribsProxy, createEventsProxy, styleProxy } from "./proxy";
+import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, HTMLTag, EmitterLike, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types";
 import { entityDataSymbol, isContent, isJelEntity, isReactiveSource } from "./util";
 
 const elementWrapCache = new WeakMap<HTMLElement, DomEntity<any>>();
@@ -21,9 +21,9 @@ const recursiveAppend = (parent: HTMLElement, c: DOMContent) => {
 
 function createElement<Tag extends HTMLTag>(
     tag: Tag,
-    descriptor: ElementDescriptor<Tag> | DOMContent = {}
+    descriptor: ElementDescriptor<Tag> | DOMContent | EmitterLike<DOMContent> = {}
 ): DomEntity<HTMLElementTagNameMap[Tag]> {
-    if (isContent(descriptor)) descriptor = {
+    if (isContent(descriptor) || isReactiveSource(descriptor)) descriptor = {
         content: descriptor,
     } as ElementDescriptor<Tag>;
 
@@ -114,7 +114,7 @@ export const $ = new Proxy(createElement, {
         return create(tagName as any, descriptor);
     },
     get(create, tagName: HTMLTag) {
-        return (descriptorOrContent: ElementDescriptor<HTMLTag> | DOMContent) => {
+        return (descriptorOrContent: ElementDescriptor<HTMLTag> | DOMContent | EmitterLike<DOMContent>) => {
             return create(tagName, descriptorOrContent);
         };
     }
@@ -390,7 +390,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                     });
                 }
             ),
-            events: new Proxy(element, eventsProxy) as unknown as EventsAccessor
+            events: createEventsProxy<HTMLElementEventMap>(element),
         };
         elementWrapCache.set(element, domEntity);
     }
@@ -426,6 +426,9 @@ export class ClassAccessor {
     }
     get length() {
         return this.classList.length;
+    }
+    get value() {
+        return this.classList.value;
     }
     toString() {
         return this.classList.toString();
