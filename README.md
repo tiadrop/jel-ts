@@ -65,14 +65,14 @@ function showDialogue(content: DOMContent) => {
 
 interface Job {
     name: string;
-    completionMessage: DOMContent;
+    completionMessage: () => DOMContent;
 }
 
 showDialogue("Hello, world");
 showDialogue(["Hello, ", $.i("world")]);
 showDialogue([
     $.h2(`${job.name} Complete`),
-    $.p(job.completionMessage),
+    $.p(job.completionMessage()),
 ]);
 ```
 

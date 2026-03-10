@@ -1,5 +1,4 @@
-// examples/ws.ts
-import { $, $body, createEventsProxy, EventsProxy } from "../src";
+import { $, $body, createEventsProxy, EventEmitterMap } from "../src";
 
 /**
  * Example WebSocket wrapper using Jel's event system.
@@ -17,8 +16,8 @@ import { $, $body, createEventsProxy, EventsProxy } from "../src";
 class MyWebSocket {
     readonly websocket: WebSocket;
     
-    // Reuse the same proxy logic that DomEntity.events uses
-    readonly events: EventsProxy<WebSocketEventMap>;
+    // Map events to emitters
+    readonly events: EventEmitterMap<WebSocketEventMap>;
 
     constructor(url: string, protocols?: string | string[])
     constructor(socket: WebSocket)
@@ -27,11 +26,11 @@ class MyWebSocket {
             ? new WebSocket(urlOrSocket, protocols) 
             : urlOrSocket;
         
-        // createEventsProxy automatically creates EventEmitter on property read
+        // events proxy automatically creates a listen-bound EventEmitter on property read
         this.events = createEventsProxy(this.websocket);
     }
 
-    // Proxy methods to the underlying WebSocket
+    // Forward methods to the underlying WebSocket
     send(data: any) { this.websocket.send(data); }
     close(code?: number, reason?: string) { this.websocket.close(code, reason); }
     
@@ -56,9 +55,8 @@ function demo() {
     
     // Show connection status
     $body.append($.div({
-        content: ws.events.open
-            .map(() => "Connected!")
-            .or(ws.events.close.map(() => "Disconnected"))
+        content: ws.events.open.as("Connected!")
+            .or(ws.events.close.as("Disconnected"))
             .immediate("Connecting...")
     }));
     

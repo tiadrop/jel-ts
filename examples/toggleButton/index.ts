@@ -33,6 +33,8 @@ export function toggleButton(options: ToggleButtonOptions = {}) {
         set state(v){
             button.classes.toggle("toggle-button-on", v);
             state = v;
-        }
+        },
+        events: { change: changeEvent.emitter },
+        remove: () => button.remove(),
     });
 }

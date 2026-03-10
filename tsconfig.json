@@ -5,7 +5,8 @@
     "target": "ES2017",
     "declaration": true,
     "strict": true,
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "lib": ["ES2019", "DOM"]
   },
   "files": ["src/index.ts"]
 }

@@ -1,5 +1,5 @@
-import { SetGetStyleFunc, CSSProperty, EventSource } from "./types";
-import { EventEmitter, toEventEmitter } from "./emitter"
+import { SetGetStyleFunc, CSSProperty, EventSource, EventEmitterMap, Handler, EventHandlerMap } from "./types";
+import { toEventEmitter } from "./emitter"
 
 export const styleProxy: ProxyHandler<SetGetStyleFunc> = {
     get(style, prop: CSSProperty){
@@ -43,23 +43,20 @@ export const attribsProxy: ProxyHandler<HTMLElement> = {
     },
 };
 
-export type EventsProxy<Map> = {
-    [K in keyof Map]: EventEmitter<Map[K]>;
-} & {
-    addEventListener<K extends keyof Map>(
-        eventName: K, 
-        listener: (event: Map[K]) => void
-    ): void;
-    removeEventListener<K extends keyof Map>(
-        eventName: K, 
-        listener: (event: Map[K]) => void
-    ): void;
-};
-
 const eventsProxyDefinition: ProxyHandler<EventSource<any, any>> = {
-    get: (element, key: string) => {
-        return toEventEmitter(element, key);
+    get: (object, key: string) => {
+        return toEventEmitter(object, key);
     }
 }
 
-export const createEventsProxy = <Map>(source: EventSource<any, keyof Map>) => new Proxy(source, eventsProxyDefinition) as unknown as EventsProxy<Map>;
+export function createEventsProxy<Map>(
+    source: EventSource<any, keyof Map>,
+    initialListeners?: EventHandlerMap<Map>
+): EventEmitterMap<Map> {
+    const proxy = new Proxy(source, eventsProxyDefinition) as unknown as EventEmitterMap<Map>;
+    if (initialListeners) {
+        Object.entries(initialListeners)
+            .forEach(([name, handler]) => toEventEmitter(source, name as keyof Map).apply(handler as Handler<any>));
+    }
+    return proxy;
+}

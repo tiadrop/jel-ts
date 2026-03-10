@@ -1,4 +1,4 @@
-import { $, createEntity, ElementClassDescriptor, DOMContent, SubjectEmitter, createEventSource } from "../src";
+import { $, createEntity, ElementClassDescriptor, DOMContent, SubjectEmitter, createEventsSource } from "../src";
 
 type FileDropperOptions = {
 	onDrop?: (files: File[]) => void;
@@ -6,12 +6,21 @@ type FileDropperOptions = {
 	multiple?: boolean;
 	classes?: ElementClassDescriptor;
 	content?: DOMContent;
+	on?: {
+		[K in keyof FileDropperEvents]?: (value: FileDropperEvents[K]) => void;
+	};
 };
 
+type FileDropperEvents = {
+	drop: File[];
+	dragEnter: void;
+	dragLeave: void;
+}
+
 export function createFileDropper(options?: FileDropperOptions) {
+	const events = createEventsSource<FileDropperEvents>(options?.on);
 	const dragHoverCount = new SubjectEmitter(0);
 	const isDragHovering = dragHoverCount.map((n) => n > 0);
-	const dropEmitter = createEventSource(options?.onDrop);
 
 	const fileInput = $.input({
 		type: "file",
@@ -24,7 +33,7 @@ export function createFileDropper(options?: FileDropperOptions) {
 			change: () => {
 				const files = fileInput.element.files;
 				if (files && files.length > 0) {
-					dropEmitter.emit(Array.from(files));
+					events.trigger("drop", Array.from(files));
 				}
 				fileInput.value = "";
 			}
@@ -60,19 +69,17 @@ export function createFileDropper(options?: FileDropperOptions) {
 				if (ev.dataTransfer?.files.length !== 1 && !options?.multiple) return;
 				dragHoverCount.next(0);
 				if (ev.dataTransfer?.files) {
-					dropEmitter.emit(Array.from(ev.dataTransfer.files));
+					events.trigger("drop", Array.from(ev.dataTransfer.files));
 				}
 			}
 		},
 		content: [fileInput, contentEl]
 	});
 
+	isDragHovering.apply(v => events.trigger(v ? "dragEnter" : "dragLeave", undefined));
+
 	return createEntity(el, {
-		events: {
-			drop: dropEmitter.emitter,
-			dragEnter: isDragHovering.filter((v) => v).map<void>(() => undefined),
-			dragLeave: isDragHovering.filter((v) => !v).map<void>(() => undefined)
-		},
+		events: events.emitters,
 		remove: () => el.remove(),
 		get content() {
 			return contentEl.content;

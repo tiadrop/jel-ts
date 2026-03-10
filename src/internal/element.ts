@@ -1,4 +1,4 @@
-import { UnsubscribeFunc } from "./emitter.js";
+import { toEventEmitter, UnsubscribeFunc } from "./emitter.js";
 import { attribsProxy, createEventsProxy, styleProxy } from "./proxy";
 import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, HTMLTag, EmitterLike, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types";
 import { entityDataSymbol, isContent, isJelEntity, isReactiveSource } from "./util";
@@ -233,8 +233,8 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
         function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | EmitterLike<CSSValue>) {
             if (listeners.style[prop]) removeListener("style", prop);
             if (typeof value == "object" && value) {
-                if ("listen" in value || "subscribe" in value) {
-                    addListener("style", prop, value);
+                if (isReactiveSource(value)) {
+                    addListener("style", prop, toEventEmitter(value));
                     return;
                 }
                 value = value.toString();
@@ -442,13 +442,9 @@ export class ClassAccessor {
     }
     map<R>(cb: (token: string, idx: number) => R) {
         const result: R[] = [];
-        const entries = this.classList.entries();
-        let entry = entries.next();
-        while (!entry.done) {
-            const [idx, value] = entry.value;
-            result.push(cb(value, idx));
-            entry = entries.next();
-        }
+        this.classList.forEach((v, i) => {
+            result.push(cb(v, i));
+        });
         return result;
     }
 }

@@ -1,6 +1,5 @@
 import { ClassAccessor } from "./element";
-import { EventEmitter, UnsubscribeFunc } from "./emitter";
-import { EventsProxy } from "./proxy";
+import { EventEmitter, ListenFunc, UnsubscribeFunc } from "./emitter";
 import { entityDataSymbol } from "./util";
 
 export type ElementClassDescriptor = string | Record<string, boolean | EmitterLike<boolean> | undefined> | undefined | ElementClassDescriptor[];
@@ -14,6 +13,8 @@ export type EmitterLike<T> = {
 } | {
     listen: (callback: (value: T) => void) => UnsubscribeFunc;
 }
+export type EmissionSource<T> = EmitterLike<T> | ListenFunc<T>;
+
 export type CSSValue = string | number | null | HexCodeContainer;
 export type CSSProperty = keyof StylesDescriptor;
 
@@ -83,7 +84,7 @@ type ElementAPI<T extends HTMLElement> = {
     readonly attribs: {
         [key: string]: string | null;
     },
-    readonly events: EventsProxy<HTMLElementEventMap>;
+    readonly events: EventEmitterMap<HTMLElementEventMap>;
     readonly style: StyleAccessor;
     setCSSVariable(variableName: string, value: CSSValue | EmitterLike<CSSValue>): void;
     setCSSVariable(table: Record<string, CSSValue | EmitterLike<CSSValue>>): void;
@@ -92,6 +93,13 @@ type ElementAPI<T extends HTMLElement> = {
     getRect(): DOMRect;
     focus(): void;
     blur(): void;
+    /**
+     * Add an event listener
+     * @param eventId 
+     * @param handler 
+     * @returns Function to remove the listener
+     * @deprecated Use ent.events
+     */
     on<E extends keyof HTMLElementEventMap>(
         eventId: E, handler: (
             this: ElementAPI<T>, data: HTMLElementEventMap[E]
@@ -219,4 +227,14 @@ export type EventSource<E, N> = {
 } | {
     addEventListener: (eventName: N, handler: Handler<E>) => void;
     removeEventListener: (eventName: N, handler: Handler<E>) => void;
+};
+
+export type Dictionary<T> = Record<string | symbol, T>;
+
+export type EventEmitterMap<Map> = {
+    [K in keyof Map]: EventEmitter<Map[K]>;
+};
+
+export type EventHandlerMap<Map> = {
+    [K in keyof Map]?: (value: Map[K]) => void;
 };

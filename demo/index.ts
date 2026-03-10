@@ -36,7 +36,7 @@ const superbutton = (spec: SuperButtonSpec) => {
 	let timesClicked = 0;
 
 	// createEventSource creates a linked emit() and Emitter
-	const clickEvent = createEventSource<SuperButtonClickEvent>(spec.on?.click);
+	const clickEvent = createEventSource(spec.on?.click);
 	
 	const button = $.button({
 		on: {
