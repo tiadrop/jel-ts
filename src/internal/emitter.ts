@@ -1,16 +1,11 @@
 import { createEventsProxy } from "./proxy.js";
-import { Dictionary, EmissionSource, EmitterLike, EventHandlerMap, EventSource, Handler, Period } from "./types";
+import { Dictionary, EmissionSource, EmitterLike, EventHandlerMap, EventSource, Handler, ListenFunc, Period, UnsubscribeFunc } from "./types";
 import { isReactiveSource } from "./util";
-
-const NOOP = () => {};
 
 function periodAsMilliseconds(t: number | Period) {
 	if (typeof t == "number") return t;
 	return "asMilliseconds" in t ? t.asMilliseconds : (t.asSeconds * 1000);
 }
-
-export type ListenFunc<T> = (handler: Handler<T>) => UnsubscribeFunc;
-export type UnsubscribeFunc = () => void;
 
 export class EventEmitter<T> {
 	constructor(protected onListen: ListenFunc<T>) {}
@@ -609,17 +604,20 @@ export function interval(t: number | Period) {
 	return new EventEmitter(listen);
 }
 
+/**
+ * Emits time deltas from a shared RAF loop
+ */
 export const animationFrames = (() => {
 	const {emit, listen} = createListenable<number>(
 		() => {
 			let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
 			let lastTime: number | null = null;
 			const frame = (time: number) => {
+				if (lastTime === null) lastTime = time;
 				rafId = requestAnimationFrame(frame);
 				const elapsed = time - lastTime!;
 				emit(elapsed);
 			};
-			lastTime = performance.now();
 			rafId = requestAnimationFrame(frame);
 			return () => cancelAnimationFrame(rafId!);
 		}

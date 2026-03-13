@@ -1,5 +1,5 @@
 import { ClassAccessor } from "./element";
-import { EventEmitter, ListenFunc, UnsubscribeFunc } from "./emitter";
+import { EventEmitter } from "./emitter";
 import { entityDataSymbol } from "./util";
 
 export type ElementClassDescriptor = string | Record<string, boolean | EmitterLike<boolean> | undefined> | undefined | ElementClassDescriptor[];
@@ -8,10 +8,13 @@ export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>>;
 
 export type HTMLTag = keyof HTMLElementTagNameMap;
 
+export type ListenFunc<T> = (handler: Handler<T>) => UnsubscribeFunc;
+export type UnsubscribeFunc = () => void;
+
 export type EmitterLike<T> = {
-    subscribe: (callback: (value: T) => void) => UnsubscribeFunc;
+    subscribe: ListenFunc<T>;
 } | {
-    listen: (callback: (value: T) => void) => UnsubscribeFunc;
+    listen: ListenFunc<T>;
 }
 export type EmissionSource<T> = EmitterLike<T> | ListenFunc<T>;
 
