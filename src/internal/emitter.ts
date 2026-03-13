@@ -613,9 +613,9 @@ export const animationFrames = (() => {
 			let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
 			let lastTime: number | null = null;
 			const frame = (time: number) => {
-				if (lastTime === null) lastTime = time;
 				rafId = requestAnimationFrame(frame);
-				const elapsed = time - lastTime!;
+				const elapsed = time - (lastTime ?? time)!;
+				lastTime = time;
 				emit(elapsed);
 			};
 			rafId = requestAnimationFrame(frame);
