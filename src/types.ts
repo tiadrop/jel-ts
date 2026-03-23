@@ -154,7 +154,7 @@ export type DomHelper = (
             descriptor: ElementDescriptor<T>
         ) => DomEntity<HTMLElementTagNameMap[T]>
     )
-    &     (
+    & (
         /**
          * Creates an element of the specified tag
          */

@@ -189,3 +189,119 @@ import { animate } from "@xtia/timeline";
 
 button.style.opacity = animate(500).tween(0, 1);
 ```
+
+## Custom streams
+
+Several utilities are provided to create event streams from existing sources and custom emit logic.
+
+### `toEventEmitter(source)`
+
+Creates an `EventEmitter<T>` from an `EmitterLike<T>`, a listen function (`(Handler<T>) => UnsubscribeFunc`), or an `EventSource` + event name pair.
+
+* `EmitterLike<T>` is any object with a compatible `subscribe|listen` method
+* `EventSource` is any object with common `addEventListener/removeEventListener|on/off` methods.
+
+```ts
+import { toEventEmitter } from "@xtia/jel";
+
+// EventSource + name:
+const keypresses$ = toEventEmitter(window, "keydown");
+
+keypresses$.map(ev => ev.key)
+    .listen(key => console.log(key, "pressed"));
+
+// EmitterLike
+function logEvents(emitter: EmitterLike<any>) {
+    // this function accepts Jel's EventEmitter, as well as RxJS
+    // streams and other compatible emitters
+    toEventEmitter(emitter).listen(value => console.log(value));
+}
+```
+
+## createEventSource<T>()
+
+Creates an EventEmitter<T> and a `emit(T)` function to control it.
+
+```ts
+import { createEventSource } from "@xtia/jel";
+
+function createGame() {
+    const winEmitPair = createEventSource<string>();
+
+    // <insert game logic>
+
+    // when someone wins:
+    winEmitPair.emit("player1");
+
+    return {
+        winEvent: winEmitPair.emitter
+    };
+}
+
+const game = createGame();
+game.winEvent
+    .filter(winner => winner === me)
+    .apply(showConfetti);
+```
+
+## createEventsSource<Map>()
+
+Creates an 'events' object and a `trigger(name, Map[name])` function to trigger specific events.
+
+```ts
+import { createEventsSource } from "@xtia/jel";
+
+type EventMap = {
+    end: { winner: string },
+    update: { state: GameState },
+}
+
+function createGame() {
+    const events = createEventsSource<EventMap>();
+
+    // when game ends
+    events.trigger("end", winnerName);
+
+    return {
+        events: events.emitters,
+    }
+}
+```
+## createEventsProxy<Map>(source)
+
+Creates an 'events' object from an `EventSource`.
+
+```ts
+import { createEventsProxy } from "@xtia/jel";
+
+const windowEvents = createEventsProxy<WindowEventMap>(window);
+// (this windowEvents is exported from @xtia/jel for convenience)
+
+windowEvents.keydown
+    .filter(ev => ev.key == "Enter")
+    .apply(() => console.log("Enter pressed"));
+```
+
+## `interval(ms)`
+
+Emits a number, incremented by 1 each time, as long as any subscriptions are active.
+
+## `timeout(ms)`
+
+Emits once after the specified time.
+
+## `animationFrames`
+
+Emits *delta times* from a `requestAnimationFrame()` loop, as long as any subscriptions are active.
+
+```ts
+import { animationFrames } from "@xtia.jel";
+
+animationFrames.listen(delta => {
+    game.tick(delta);
+});
+
+## SubjectEmitter
+
+Creates a manually-controlled emitter that maintains its last emitted value (`em.value`), emits it immediately to
+and new subscription and can be updated with `em.next(value)`.

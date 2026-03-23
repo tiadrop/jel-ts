@@ -1,4 +1,4 @@
-import { $, createEntity, ElementClassDescriptor, DOMContent, SubjectEmitter, createEventsSource } from "../src";
+import { $, createEntity, ElementClassDescriptor, DOMContent, SubjectEmitter, createEventsSource } from "../lib";
 
 type FileDropperOptions = {
 	onDrop?: (files: File[]) => void;

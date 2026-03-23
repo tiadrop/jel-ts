@@ -1,7 +1,7 @@
 import { toEventEmitter } from "./emitter.js";
 import { attribsProxy, createEventsProxy, styleProxy } from "./proxy";
 import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, HTMLTag, EmitterLike, SetGetStyleFunc, StyleAccessor, StylesDescriptor, UnsubscribeFunc } from "./types";
-import { entityDataSymbol, isContent, isJelEntity, isReactiveSource } from "./util";
+import { entityDataSymbol, isContent, isJelEntity, isReactiveSource } from "./util.js";
 
 const elementWrapCache = new WeakMap<HTMLElement, DomEntity<any>>();
 

@@ -1,5 +1,3 @@
 node_modules/
-dist/index.js
-dist/index.d.ts
-dist/internal/
-scratch/**
+lib/
+scratch/

@@ -1,15 +1,38 @@
 {
-  "name": "jel-ts",
-  "version": "0.10.0",
-  "description": "Lightweight DOM manipulation and componentisation",
-  "main": "index.js",
-  "directories": {
-    "lib": "src"
+  "name": "@xtia/jel",
+  "version": "0.11.2",
+  "description": "Lightweight DOM manipulation, componentisation and reactivity",
+  "keywords": [
+    "dom",
+    "reactive",
+    "streams",
+    "reactive-programming",
+    "frontend",
+    "ui",
+    "framework"
+  ],
+  "types": "./lib/index.d.ts",
+  "main": "./lib/index.js",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./lib/*": null
   },
   "scripts": {
-    "build": "npx tsc",
-    "watch-demo": "webpack --watch"
+    "build": "tsc",
+    "watch-demo": "webpack --watch",
+    "prepublishOnly": "tsc"
   },
+  "repository": {
+    "url": "https://github.com/tiadrop/jel-ts",
+    "type": "github"
+  },
+  "files": [
+    "lib/"
+  ],
   "author": "Aleta Lovelace",
   "license": "MIT",
   "devDependencies": {
