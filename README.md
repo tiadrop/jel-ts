@@ -305,7 +305,7 @@ animationFrames.listen(delta => {
 ### SubjectEmitter
 
 Creates a manually-controlled emitter that maintains its last emitted value (`em.value`), emits it immediately to
-and new subscription and can be updated with `em.next(value)`.
+subscribers and can be updated with `em.next(value)`.
 
 ```ts
 const lives$ = new SubjectEmitter(5);
