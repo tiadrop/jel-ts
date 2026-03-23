@@ -218,7 +218,7 @@ function logEvents(emitter: EmitterLike<any>) {
 }
 ```
 
-## createEventSource<T>()
+### createEventSource<T>()
 
 Creates an EventEmitter<T> and a `emit(T)` function to control it.
 
@@ -244,7 +244,7 @@ game.winEvent
     .apply(showConfetti);
 ```
 
-## createEventsSource<Map>()
+### createEventsSource<Map>()
 
 Creates an 'events' object and a `trigger(name, Map[name])` function to trigger specific events.
 
@@ -267,7 +267,7 @@ function createGame() {
     }
 }
 ```
-## createEventsProxy<Map>(source)
+### createEventsProxy<Map>(source)
 
 Creates an 'events' object from an `EventSource`.
 
@@ -282,15 +282,15 @@ windowEvents.keydown
     .apply(() => console.log("Enter pressed"));
 ```
 
-## `interval(ms)`
+### `interval(ms)`
 
 Emits a number, incremented by 1 each time, as long as any subscriptions are active.
 
-## `timeout(ms)`
+### `timeout(ms)`
 
 Emits once after the specified time.
 
-## `animationFrames`
+### `animationFrames`
 
 Emits *delta times* from a `requestAnimationFrame()` loop, as long as any subscriptions are active.
 
@@ -300,8 +300,22 @@ import { animationFrames } from "@xtia.jel";
 animationFrames.listen(delta => {
     game.tick(delta);
 });
+```
 
-## SubjectEmitter
+### SubjectEmitter
 
 Creates a manually-controlled emitter that maintains its last emitted value (`em.value`), emits it immediately to
 and new subscription and can be updated with `em.next(value)`.
+
+```ts
+const lives$ = new SubjectEmitter(5);
+
+const livesDisplay = $.div({
+    content: lives$.map(n => Array.from({length: n}, () => "❤️"))
+});
+
+function loseLife() {
+    lives$.next(lives$.value - 1);
+    // livesDisplay will update automatically
+}
+```
