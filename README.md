@@ -284,7 +284,7 @@ windowEvents.keydown
 
 ### `interval(ms)`
 
-Emits a number, incremented by 1 each time, as long as any subscriptions are active.
+Emits an incrementing number on an interval, as long as any subscriptions are active.
 
 ### `timeout(ms)`
 
@@ -295,7 +295,7 @@ Emits once after the specified time.
 Emits *delta times* from a `requestAnimationFrame()` loop, as long as any subscriptions are active.
 
 ```ts
-import { animationFrames } from "@xtia.jel";
+import { animationFrames } from "@xtia/jel";
 
 animationFrames.listen(delta => {
     game.tick(delta);
