@@ -260,7 +260,7 @@ function createGame() {
     const events = createEventsSource<EventMap>();
 
     // when game ends
-    events.trigger("end", winnerName);
+    events.trigger("end", {winner: winnerName});
 
     return {
         events: events.emitters,
