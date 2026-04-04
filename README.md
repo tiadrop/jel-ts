@@ -3,7 +3,7 @@
 
 Jel is a thin layer over the DOM to simplify element structure creation, manipulation and componentisation with 'vanilla' TS/JS.
 
-See [demo/index.ts](https://github.com/tiadrop/jel-ts/blob/main/demo/index.ts) for reusable components. Compare with [resulting page](https://aleta.codes/jel-ts-demo/).
+* [Pizza calculator tutorial](https://www.aleta.codes/#pizzaCalc)
 
 ## `$` Basic Use:
 
