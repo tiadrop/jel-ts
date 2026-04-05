@@ -15,7 +15,7 @@ $ npm i @xtia/jel
 ```ts
 import { $ } from "@xtia/jel";
 
-// wrap body
+// wrap an existing element (body) as a Jel entity
 const body = $(document.body);
 
 body.append($.form([
