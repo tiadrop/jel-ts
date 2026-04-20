@@ -604,25 +604,37 @@ export function interval(t: number | Period) {
 	return new EventEmitter(listen);
 }
 
+class TimestampEmitter extends EventEmitter<number> {
+	/**
+	 * Creates a chainable emitter that emits elapsed times from a parent timestamp emitter
+	 * @returns Delta time emitter
+	 */
+	delta() {
+		let last: number;
+		return this.transform<number>((value, emit) => {
+			const delta = last !== undefined ? value - last : 0;
+			last = value;
+			emit(delta);
+		});
+	}
+}
+
 /**
- * Emits time deltas from a shared RAF loop
+ * Emits timestamps from a shared RAF loop
  */
 export const animationFrames = (() => {
 	const {emit, listen} = createListenable<number>(
 		() => {
 			let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
-			let lastTime: number | null = null;
 			const frame = (time: number) => {
 				rafId = requestAnimationFrame(frame);
-				const elapsed = time - (lastTime ?? time)!;
-				lastTime = time;
-				emit(elapsed);
+				emit(time);
 			};
 			rafId = requestAnimationFrame(frame);
 			return () => cancelAnimationFrame(rafId!);
 		}
 	);
-	return new EventEmitter(listen);
+	return new TimestampEmitter(listen);
 })();
 
 export function timeout(ms: number): EventEmitter<void>
