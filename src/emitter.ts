@@ -611,11 +611,11 @@ class TimestampEmitter extends EventEmitter<number> {
 	 */
 	delta() {
 		let last: number;
-		return this.transform<number>((value, emit) => {
+		return new EventEmitter(this.transform<number>((value, emit) => {
 			const delta = last !== undefined ? value - last : 0;
 			last = value;
 			emit(delta);
-		});
+		}));
 	}
 }
 
