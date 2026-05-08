@@ -1,4 +1,4 @@
-import { $, createEntity, ElementClassDescriptor, SubjectEmitter } from "../../src";
+import { $, createEntity, ElementClassDescriptor, SubjectEmitter } from "@xtia/jel";
 
 export const progressBar = (spec: {
     value?: number;

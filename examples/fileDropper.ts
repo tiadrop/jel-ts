@@ -1,4 +1,4 @@
-import { $, createEntity, ElementClassDescriptor, DOMContent, SubjectEmitter, createEventsSource } from "../lib";
+import { $, createEntity, ElementClassDescriptor, DOMContent, SubjectEmitter, createEventsSource } from "@xtia/jel";
 
 type FileDropperOptions = {
 	onDrop?: (files: File[]) => void;

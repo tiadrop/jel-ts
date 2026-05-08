@@ -1,4 +1,4 @@
-import { $, $body, createEventsProxy, EventEmitterMap } from "../lib";
+import { $, $body, createEventsProxy, EventEmitterMap } from "@xtia/jel";
 
 /**
  * Example WebSocket wrapper using Jel's event system.

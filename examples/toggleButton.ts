@@ -1,4 +1,4 @@
-import { $, createEntity, createEventSource, DOMContent, ElementClassDescriptor } from "../../src/index";
+import { $, createEntity, DOMContent, ElementClassDescriptor, SubjectEmitter } from "@xtia/jel";
 
 type ToggleButtonOptions = {
     caption?: DOMContent;
@@ -10,8 +10,7 @@ type ToggleButtonOptions = {
 };
 
 export function toggleButton(options: ToggleButtonOptions = {}) {
-    const changeEvent = createEventSource(options.on?.change);
-    let state = !!options.state;
+    const state = new SubjectEmitter(!!options.state);
 
     const button = $.button({
         classes: [
@@ -22,19 +21,17 @@ export function toggleButton(options: ToggleButtonOptions = {}) {
         content: options.caption,
         on: {
             click: () => {
-                state = !state;
-                button.classes.toggle("toggle-button-on", state);
-                changeEvent.emit({ state });        
+                state.next(!state.value);
             },
         }
     });
     return createEntity(button, {
-        get state(){ return state },
+        get state(){ return state.value },
         set state(v){
             button.classes.toggle("toggle-button-on", v);
-            state = v;
+            state.next(v);
         },
-        events: { change: changeEvent.emitter },
+        events: { change: state.asReadOnly() },
         remove: () => button.remove(),
     });
 }

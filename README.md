@@ -15,10 +15,7 @@ $ npm i @xtia/jel
 ```ts
 import { $ } from "@xtia/jel";
 
-// wrap an existing element (body) as a Jel entity
-const body = $(document.body);
-
-body.append($.form([
+const myForm = $.form([
     $.h2("Sign in"),
     $.label("Email"),
     $.input({ attribs: { name: "email" }}),
@@ -29,7 +26,12 @@ body.append($.form([
         content: ["Having trouble? ", $.strong("Recover account")],
         href: "/recover-account",
     })
-]));
+]);
+
+// wrap an existing element (body) as a Jel entity
+const body = $(document.body);
+
+body.append(myForm);
 
 body.append([
     $.h2("Files"),
@@ -42,6 +44,8 @@ body.append([
         ))
     )
 ])
+
+
 ```
 
 ## `DOMContent`
@@ -234,6 +238,7 @@ function createGame() {
     winEmitPair.emit("player1");
 
     return {
+        // only expose the emitter
         winEvent: winEmitPair.emitter
     };
 }
