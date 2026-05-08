@@ -16,7 +16,7 @@ export type EmitterLike<T> = {
 } | {
     listen: ListenFunc<T>;
 }
-export type EmissionSource<T> = EmitterLike<T> | ListenFunc<T>;
+export type EmissionSource<T> = EmitterLike<T> | ListenFunc<T> | Promise<T>;
 
 export type CSSValue = string | number | null | HexCodeContainer;
 export type CSSProperty = keyof StylesDescriptor;

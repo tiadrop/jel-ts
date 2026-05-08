@@ -698,6 +698,9 @@ export class SubjectEmitter<T> extends EventEmitter<T> {
 		this._value = value;
 		this.emit(value);
 	}
+	asReadOnly() {
+		return toEventEmitter(this);
+	}
 }
 
 /**
@@ -714,6 +717,11 @@ export function toEventEmitter<E, N>(source: EventSource<E, N>, eventName: N): E
 export function toEventEmitter<E, N>(source: EmissionSource<E> | EventSource<E, N>, eventName?: N): EventEmitter<E> {
     if (source instanceof EventEmitter) return source;
 	if (typeof source == "function") return new EventEmitter(source);
+	if (source instanceof Promise) {
+		const { emit, emitter } = createEventSource<E>();
+		source.then(emit);
+		return emitter;
+	}
 
     if (eventName !== undefined) {
         // addEL()
@@ -788,16 +796,16 @@ function combineRecord(emitters: Record<string | symbol, EventEmitter<any>>) {
     return new EventEmitter(listen);
 }
 
-type ExtractEmitterValue<T> = T extends EmitterLike<infer U> ? U : never;
-type CombinedRecord<T extends Dictionary<EmitterLike<any>>> = {
+type ExtractEmitterValue<T> = T extends EmissionSource<infer U> ? U : never;
+type CombinedRecord<T extends Dictionary<EmissionSource<any>>> = {
     readonly [K in keyof T]: ExtractEmitterValue<T[K]>;
 }
 
-export function combineEmitters<U extends Dictionary<EmitterLike<any>>>(emitters: U): EventEmitter<CombinedRecord<U>>
-export function combineEmitters<U extends EmitterLike<any>[]>(emitters: [...U]): EventEmitter<{
+export function combineEmitters<U extends Dictionary<EmissionSource<any>>>(sourceMap: U): EventEmitter<CombinedRecord<U>>
+export function combineEmitters<U extends EmissionSource<any>[]>(sources: [...U]): EventEmitter<{
     [K in keyof U]: ExtractEmitterValue<U[K]>;
 }>
-export function combineEmitters(emitters: EmitterLike<any>[] | Dictionary<EmitterLike<any>>) {
-	if (Array.isArray(emitters)) return combineArray(emitters.map(toEventEmitter));
-	return combineRecord(Object.fromEntries(Object.entries(emitters).map(([k, e]) => [k, toEventEmitter(e)])));
+export function combineEmitters(sources: EmissionSource<any>[] | Dictionary<EmissionSource<any>>) {
+	if (Array.isArray(sources)) return combineArray(sources.map(toEventEmitter));
+	return combineRecord(Object.fromEntries(Object.entries(sources).map(([k, e]) => [k, toEventEmitter(e)])));
 }
