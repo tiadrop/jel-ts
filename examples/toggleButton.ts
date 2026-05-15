@@ -28,7 +28,6 @@ export function toggleButton(options: ToggleButtonOptions = {}) {
     return createEntity(button, {
         get state(){ return state.value },
         set state(v){
-            button.classes.toggle("toggle-button-on", v);
             state.next(v);
         },
         events: { change: state.asReadOnly() },
