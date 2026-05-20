@@ -13,7 +13,7 @@ export class EventEmitter<T> {
 	protected transform<R = T>(
 		handler: (value: T, emit: (value: R) => void) => void
 	) {
-		const {emit, listen} = createListenable<R>(
+		const {emit, listen} = createEmitListenPair<R>(
 			() => this.onListen(value => {
 				handler(value, emit);
 			}),
@@ -36,6 +36,30 @@ export class EventEmitter<T> {
 	 */
 	apply(handler: Handler<T>): UnsubscribeFunc {
 		return this.onListen(handler);
+	}
+	when(condition: EmitterLike<boolean> | EmitterLike<boolean>[]): EventEmitter<T> {
+		const conditionEmitter = Array.isArray(condition)
+			? combineEmitters(condition.map(e => toEventEmitter(e)))
+				.map(values => values.every(v => v))
+			: toEventEmitter(condition);
+		
+		return new EventEmitter<T>((handler: Handler<T>) => {
+			let unsubHandler: UnsubscribeFunc | undefined;
+			
+			const unsubCondition = conditionEmitter.dedupe().apply(conditionMet => {
+				if (conditionMet) {
+					unsubHandler = this.apply(handler);
+				} else {
+					unsubHandler?.();
+					unsubHandler = undefined;
+				}
+			});
+			
+			return () => {
+				unsubCondition?.();
+				unsubHandler?.();
+			};
+		});
 	}
 	/**
 	 * Creates a chainable emitter that applies arbitrary transformation to values emitted by its parent
@@ -218,7 +242,7 @@ export class EventEmitter<T> {
 			}
 		};
 		
-		const { emit, listen } = createListenable<T>(
+		const { emit, listen } = createEmitListenPair<T>(
 			() => {
 				if (completed) return;
 				parentUnsubscribe = this.apply(v => {
@@ -281,7 +305,7 @@ export class EventEmitter<T> {
 		let count = 0;
 		let completed = false;
 		
-		const { emit, listen } = createListenable<T>(
+		const { emit, listen } = createEmitListenPair<T>(
 			() => {
 				if (completed) return;
 				
@@ -322,7 +346,7 @@ export class EventEmitter<T> {
 			notifierUnsub?.();
 		};
 
-		const { emit, listen } = createListenable<T>(
+		const { emit, listen } = createEmitListenPair<T>(
 			() => {
 				if (completed) return;
 				parentUnsubscribe = this.apply(emit);
@@ -346,7 +370,7 @@ export class EventEmitter<T> {
 		let parentUnsubscribe: UnsubscribeFunc | undefined;
 		let completed = false;
 
-		const { emit, listen } = createListenable<T>(
+		const { emit, listen } = createEmitListenPair<T>(
 			() => {
 				if (completed) return;
 				parentUnsubscribe = this.apply(v => {
@@ -371,8 +395,10 @@ export class EventEmitter<T> {
 	 * @param value 
 	 * @returns A new emitter that emits a value to new subscribers and forwards all values from the parent
 	 */
-	immediate(value: T) {
-		return new EventEmitter<T>(handle => {
+	immediate(value: T): EventEmitter<T>
+	immediate<U>(value: U): EventEmitter<T | U>
+	immediate<U>(value: U): EventEmitter<T | U> {
+		return new EventEmitter<T | U>(handle => {
 			handle(value);
 			return this.onListen(handle);
 		});
@@ -385,7 +411,7 @@ export class EventEmitter<T> {
 	 */
 	cached() {
 		let cache: null | {value: T} = null;
-		const {listen, emit} = createListenable<T>(
+		const {listen, emit} = createEmitListenPair<T>(
 			() => this.onListen((value => {
 				cache = { value };
 				emit(value);
@@ -461,7 +487,7 @@ export class EventRecording<T> {
         let idx = 0;
         let elapsed = 0;
         
-        const { emit, listen } = createListenable<T>();
+        const { emit, listen } = createEmitListenPair<T>();
         
         const unsubscribe = animationFrames.listen((frameElapsed) => {
             elapsed += frameElapsed * speed;
@@ -532,7 +558,7 @@ export function createEventSource<T>(arg?: Handler<T> | CreateEventSourceOptions
 		arg = { initialHandler: arg };
 	}
 	const { initialHandler, activate } = arg ?? {};
-    const { emit, listen } = createListenable<T>(activate);
+    const { emit, listen } = createEmitListenPair<T>(activate);
 	if (initialHandler) listen(initialHandler);
     return {
         emit,
@@ -568,7 +594,7 @@ export function createEventsSource<
 	}
 }
 
-function createListenable<T>(sourceListen?: () => UnsubscribeFunc | undefined) {
+export function createEmitListenPair<T>(sourceListen?: () => UnsubscribeFunc | undefined) {
 	const handlers: {fn: (v: T) => void}[] = [];
 	let onRemoveLast: undefined | UnsubscribeFunc;
 	const addListener = (fn: (v: T) => void): UnsubscribeFunc => {
@@ -593,7 +619,7 @@ export function interval(period: Period): EventEmitter<number>
 export function interval(t: number | Period) {
 	let intervalId: ReturnType<typeof setInterval> | null = null;
 	let idx = 0;
-	const {emit, listen} = createListenable<number>(
+	const {emit, listen} = createEmitListenPair<number>(
 		() => {
 			intervalId = setInterval(() => {
 				emit(idx++);
@@ -623,7 +649,7 @@ class TimestampEmitter extends EventEmitter<number> {
  * Emits timestamps from a shared RAF loop
  */
 export const animationFrames = (() => {
-	const {emit, listen} = createListenable<number>(
+	const {emit, listen} = createEmitListenPair<number>(
 		() => {
 			let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
 			const frame = (time: number) => {
@@ -642,7 +668,7 @@ export function timeout(period: Period): EventEmitter<void>
 export function timeout(t: number | Period) {
 	const ms = periodAsMilliseconds(t);
 	const targetTime = Date.now() + ms;
-	const {emit, listen} = createListenable<void>(
+	const {emit, listen} = createEmitListenPair<void>(
 		() => {
 			const reminaingMs = targetTime - Date.now();
 			if (reminaingMs < 0) return;
@@ -681,7 +707,7 @@ export class SubjectEmitter<T> extends EventEmitter<T> {
 	private emit: (value: T) => void;
 	private _value: T;
 	constructor(initial: T) {
-		const {emit, listen} = createListenable<T>();
+		const {emit, listen} = createEmitListenPair<T>();
 		super(h => {
 			h(this._value); // immediate emit on listen
 			return listen(h);
@@ -699,7 +725,7 @@ export class SubjectEmitter<T> extends EventEmitter<T> {
 		this.emit(value);
 	}
 	asReadOnly() {
-		return toEventEmitter(this);
+		return new EventEmitter(h => this.apply(h));
 	}
 }
 
@@ -763,7 +789,7 @@ export function toEventEmitter<E, N>(source: EmissionSource<E> | EventSource<E, 
 
 function combineArray(emitters: EventEmitter<any>[]) {
 	let values: (undefined | {value: any})[] = Array.from({length: emitters.length});
-	const { emit, listen } = createListenable(() => {
+	const { emit, listen } = createEmitListenPair(() => {
 		const unsubFuncs = emitters.map((emitter, idx) => {
 			return emitter.listen(v => {
 				values[idx] = {value: v};
@@ -779,7 +805,7 @@ function combineRecord(emitters: Record<string | symbol, EventEmitter<any>>) {
     const keys = Object.keys(emitters);
     let values: Record<string | symbol, (undefined | {value: any})> = {};
     
-    const { emit, listen } = createListenable(() => {
+    const { emit, listen } = createEmitListenPair(() => {
         const unsubFuncs = keys.map(key => {
             return emitters[key].listen(v => {
                 values[key] = {value: v};

@@ -1,4 +1,4 @@
-import { toEventEmitter } from "./emitter.js";
+import { createEventSource, createEventsSource, createEmitListenPair, toEventEmitter, EventEmitter } from "./emitter.js";
 import { attribsProxy, createEventsProxy, styleProxy } from "./proxy";
 import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, HTMLTag, EmitterLike, SetGetStyleFunc, StyleAccessor, StylesDescriptor, UnsubscribeFunc } from "./types";
 import { entityDataSymbol, isContent, isJelEntity, isReactiveSource } from "./util.js";
@@ -120,10 +120,7 @@ export const $ = new Proxy(createElement, {
     }
 }) as DomHelper;
 
-const elementMutationMap = new WeakMap<Node, {
-    add: () => void;
-    remove: () => void;
-}>();
+const elementMutationMap = new WeakMap<Node, (v: boolean) => void>();
 
 let mutationObserver: MutationObserver | null = null;
 function observeMutations() {
@@ -131,13 +128,13 @@ function observeMutations() {
     mutationObserver = new MutationObserver((mutations) => {
         const recursiveAdd = (node: Node) => {
             if (elementMutationMap.has(node)) {
-                elementMutationMap.get(node)!.add();
+                elementMutationMap.get(node)!(true);
             }
             if (node.hasChildNodes()) node.childNodes.forEach(recursiveAdd);
         };
         const recursiveRemove = (node: Node) => {
             if (elementMutationMap.has(node)) {
-                elementMutationMap.get(node)!.remove();
+                elementMutationMap.get(node)!(false);
             }
             if (node.hasChildNodes()) node.childNodes.forEach(recursiveRemove);
         }
@@ -152,100 +149,65 @@ function observeMutations() {
     })
 }
 
-type PropertyListener = {
-    subscribe: () => UnsubscribeFunc;
-    unsubscribe: UnsubscribeFunc | null;
-}
-
 function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
     if (!elementWrapCache.has(element)) {
-        const setCSSVariable = (k: string, v: any) => {
+        const setCSSVariableDirect = (k: string, v: any) => {
             if (v === null) {
                 element.style.removeProperty("--" + k);
             } else {
                 element.style.setProperty("--" + k, v)
             }
         };
-
-        const listeners: {
-            style: Record<string, PropertyListener>;
-            cssVariable: Record<string, PropertyListener>;
-            content: Record<string, PropertyListener>;
-            class: Record<string, PropertyListener>;
-        } = {
-            style: {},
-            cssVariable: {},
-            content: {},
-            class: {},
-        };
-
-        function addListener(type: keyof typeof listeners, prop: string, source: EmitterLike<any>) {
-            const set = {
-                style: (v: any) => element.style[prop as CSSProperty] = v,
-                cssVariable: (v: any) => setCSSVariable(prop, v),
-                content: (v: any) => {
-                    element.innerHTML = "";
-                    recursiveAppend(element, v);
-                },
-                class: (v: any) => element.classList.toggle(prop, v),
-            }[type];
-            const subscribe = "subscribe" in source
-                ? () => source.subscribe(set)
-                : () => source.listen(set);
-            
-            listeners[type][prop] = {
-                subscribe,
-                unsubscribe: element.isConnected ? subscribe() : null,
-            };
-            if (!elementMutationMap.has(element)) {
-                elementMutationMap.set(element, {
-                    add: () => {
-                        Object.values(listeners).forEach(group => {
-                            Object.values(group).forEach(l => l.unsubscribe = l.subscribe());
-                        });
-                    },
-                    remove: () => {
-                        Object.values(listeners).forEach(group => {
-                            Object.values(group).forEach(l => {
-                                l.unsubscribe?.();
-                                l.unsubscribe = null;
-                            })
-                        })
-                    }
-                })
+        const setCSSVariable = (k: string, v: CSSValue | EmitterLike<CSSValue>) => {
+            if (cssVariableUnsubMap[k]) {
+                cssVariableUnsubMap[k]();
+                delete cssVariableUnsubMap[k];
             }
-            observeMutations();
+            if (isReactiveSource(v)) {
+                cssVariableUnsubMap[k] = toEventEmitter(v).when(connected$).apply(v => {
+                    setCSSVariableDirect(k, v);
+                });
+                return;
+            }
+
+            setCSSVariableDirect(k, v);
         }
 
-        function removeListener(type: keyof typeof listeners, prop: string) {
-            if (listeners[type][prop].unsubscribe) {
-                listeners[type][prop].unsubscribe();
-            }
-            delete listeners[type][prop];
-            if (!Object.keys(listeners).some(group => Object.keys(group).length == 0)) {
-                elementMutationMap.delete(element);
-            }
-        }
+        const styleUnsubMap: Partial<Record<CSSProperty, UnsubscribeFunc>> = {};
+        const cssVariableUnsubMap: Record<string, UnsubscribeFunc> = {};
+        const classUnsubMap: Record<string, UnsubscribeFunc> = {};
+        let contentUnsub: UnsubscribeFunc | undefined;
 
-
-        function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | EmitterLike<CSSValue>): void
+        function setStyle(prop: keyof StylesDescriptor, value: CSSValue | EmitterLike<CSSValue>): void
         function setStyle(prop: keyof StylesDescriptor): string
         function setStyle(prop: keyof StylesDescriptor, value?: CSSValue | EmitterLike<CSSValue>) {
-            if (listeners.style[prop]) removeListener("style", prop);
+            if (styleUnsubMap[prop]) {
+                styleUnsubMap[prop]();
+                delete styleUnsubMap[prop];
+            }
             if (typeof value == "object" && value) {
                 if (isReactiveSource(value)) {
-                    addListener("style", prop, toEventEmitter(value));
+                    styleUnsubMap[prop] = toEventEmitter(value)
+                        .when(connected$)
+                        .apply((v: any) => element.style[prop] = v);
                     return;
                 }
                 value = value.toString();
             }
             if (value === undefined) {
-                return prop in listeners
-                    ? listeners.style[prop].subscribe
-                    : element.style[prop];
+                return element.style[prop];
             }
             element.style[prop] = value as string;
         }
+
+        const connected = createEmitListenPair<boolean>(() => {
+            elementMutationMap.set(element, connected.emit);
+            observeMutations();
+            return () => {
+                elementMutationMap.delete(element);
+            }
+        });
+        const connected$ = new EventEmitter(connected.listen).immediate(undefined).map(() => element.isConnected);
 
         const domEntity: DomEntity<any> = {
             [entityDataSymbol]: {
@@ -264,30 +226,17 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
 
             },
             append(...content: DOMContent[]) {
-                if (listeners.content?.[""]) removeListener("content", "");
                 recursiveAppend(element, content);
             },
             remove: () => element.remove(),
-            setCSSVariable(variableNameOrTable, value?) {
+            setCSSVariable(variableNameOrTable, value?: CSSValue | EmitterLike<CSSValue>) {
                 if (typeof variableNameOrTable == "object") {
                     Object.entries(variableNameOrTable).forEach(
-                        ([k, v]) => {
-                            if (isReactiveSource(v)) {
-                                addListener("cssVariable", k, v);
-                                return;
-                            }
-                            setCSSVariable(k, v);
-                        }
+                        ([k, v]) => setCSSVariable(k, v),
                     );
                     return;
                 }
-                if (listeners.cssVariable[variableNameOrTable]) removeListener("cssVariable", variableNameOrTable);
-                if (isReactiveSource(value)) {
-                    addListener("cssVariable", variableNameOrTable, value);
-                    return;
-                }
-
-                setCSSVariable(variableNameOrTable, value);
+                setCSSVariable(variableNameOrTable, value!);
             },
             qsa(selector: string) {
                 const results: (Element | DomEntity<HTMLElement>)[] = [];
@@ -304,6 +253,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             select: () => (element as any).select(),
             play: () => (element as any).play(),
             pause: () => (element as any).pause(),
+            domConnected$: connected$,
             getContext(mode: string, options?: CanvasRenderingContext2DSettings) {
                 return (element as any).getContext(mode, options);
             },
@@ -314,9 +264,15 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 }) as DOMContent;
             },
             set content(v: DOMContent | EmitterLike<DOMContent>) {
-                if (listeners.content?.[""]) removeListener("content", "");
+                if (contentUnsub) {
+                    contentUnsub();
+                    contentUnsub = undefined;
+                }
                 if (isReactiveSource(v)) {
-                    addListener("content", "", v);
+                    contentUnsub = toEventEmitter(v).when(connected$).apply(v => {
+                        element.innerHTML = "";
+                        recursiveAppend(element, v);
+                    })
                     return;
                 }
                 element.innerHTML = "";
@@ -383,10 +339,15 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             style: new Proxy<SetGetStyleFunc>(setStyle as any, styleProxy) as unknown as StyleAccessor,
             classes: new ClassAccessor(
                 element.classList,
-                (className, stream) => addListener("class", className, stream),
+                (className, stream) => {
+                    toEventEmitter(stream).when(connected$).apply(v => element.classList.toggle(className, v));
+                },
                 (classNames) => {
                     classNames.forEach(c => {
-                        if (listeners.class[c]) removeListener("class", c);
+                        if (classUnsubMap[c]) {
+                            classUnsubMap[c]();
+                            delete classUnsubMap[c];
+                        }
                     });
                 }
             ),

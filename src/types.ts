@@ -96,6 +96,7 @@ type ElementAPI<T extends HTMLElement> = {
     getRect(): DOMRect;
     focus(): void;
     blur(): void;
+    domConnected$: EventEmitter<boolean>;
     /**
      * Add an event listener
      * @param eventId 
