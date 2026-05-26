@@ -22,26 +22,34 @@ export class EventEmitter<T> {
 	}
 
 	/**
-	 * Compatibility alias for `apply()` - registers a function to receive emitted values
-	 * @param handler 
-	 * @returns A function to deregister the handler
+	 * Without arguments, returns a chainable emitter with `open()`/`close()` methods to manually
+	 * control the parent subscription. **Starts open**.
+	 * 
+	 * With a `controller` argument, returns an `EventEmitter<T>` where the subscription
+	 * is automatically managed by the given boolean emitter (`true` opens, `false` closes). **Starts closed**.
+	 * This pattern is useful for automatically freeing memory when conditions change.
+	 * 
+	 * @example
+	 * ```ts
+	 * // Manual memory management: close gate to free subscription
+	 * const gate = emitter.gate();
+	 * gate.open();   // Connect to parent (subscribe)
+	 * gate.close();  // Disconnect from parent (free memory)
+	 * 
+	 * // Automatic memory management: only subscribe when element is in DOM
+	 * emitter
+	 *   .gate(inputElement.domConnected$)
+	 *   .apply(v => console.log(v));
+	 * // Subscription automatically freed when element leaves DOM
+	 * ```
 	 */
-	listen(handler: Handler<T>): UnsubscribeFunc {
-		return this.onListen(handler);
-	}
-	/**
-	 * Registers a function to receive emitted values
-	 * @param handler 
-	 * @returns A function to deregister the handler
-	 */
-	apply(handler: Handler<T>): UnsubscribeFunc {
-		return this.onListen(handler);
-	}
-	when(condition: EmitterLike<boolean> | EmitterLike<boolean>[]): EventEmitter<T> {
-		const conditionEmitter = Array.isArray(condition)
-			? combineEmitters(condition.map(e => toEventEmitter(e)))
-				.map(values => values.every(v => v))
-			: toEventEmitter(condition);
+	gate(): EmitterGate<T>;
+	gate(controller: EmitterLike<boolean>): EventEmitter<T>
+	gate(controller?: EmitterLike<boolean>) {
+		if (!controller) {
+			return new EmitterGate(this.onListen);
+		}
+		const conditionEmitter = toEventEmitter(controller);
 		
 		return new EventEmitter<T>((handler: Handler<T>) => {
 			let unsubHandler: UnsubscribeFunc | undefined;
@@ -61,6 +69,24 @@ export class EventEmitter<T> {
 			};
 		});
 	}
+
+	/**
+	 * Compatibility alias for `apply()` - registers a function to receive emitted values
+	 * @param handler 
+	 * @returns A function to deregister the handler
+	 */
+	listen(handler: Handler<T>): UnsubscribeFunc {
+		return this.onListen(handler);
+	}
+	/**
+	 * Registers a function to receive emitted values
+	 * @param handler 
+	 * @returns A function to deregister the handler
+	 */
+	apply(handler: Handler<T>): UnsubscribeFunc {
+		return this.onListen(handler);
+	}
+
 	/**
 	 * Creates a chainable emitter that applies arbitrary transformation to values emitted by its parent
 	 * @param mapFunc 
@@ -97,7 +123,7 @@ export class EventEmitter<T> {
 	}
 	/**
 	 * Creates a chainable emitter that discards emitted values that are the same as the last value emitted by the new emitter
-	 * @param compare Optional function that takes the previous and next values and returns true if they should be considered equal
+	 * @param compare Optional function that takes the previous and next values and returns **true** if they should be considered equal
 	 * 
 	 * If no `compare` function is provided, values will be compared via `===`
 	 * @returns Listenable: emits non-repeating values
@@ -429,7 +455,7 @@ export class EventEmitter<T> {
 	 */
 	or(...emitters: EmitterLike<T>[]): EventEmitter<T>
 	or<U>(...emitters: EmitterLike<U>[]): EventEmitter<T | U>
-	or(...emitters: EmitterLike<unknown>[]): EventEmitter<unknown> {
+	or(...emitters: EmitterLike<any>[]): EventEmitter<any> {
 		return new EventEmitter(handler => {
 			const unsubs = [this, ...emitters].map(e => toEventEmitter(e).listen(handler));
 			return () => unsubs.forEach(unsub => unsub());
@@ -443,10 +469,96 @@ export class EventEmitter<T> {
 		return new Memo(this, initial);
 	}
 
+	watch() {
+		return new Monitor(this.onListen);
+	}
 	record() {
 		return new EventRecorder(this);
 	}
+}
 
+type MonitorEventMap<T> = {
+	listen: void;
+	unlisten: void;
+}
+
+class Monitor<T> extends EventEmitter<T> {
+	private eventManager = createEventsSource<MonitorEventMap<T>>();
+	private _count: number = 0;
+	get count() {
+		return this._count;
+	}
+	events = this.eventManager.emitters;
+	listen(handler: Handler<T>) {
+		this._count++;
+		const unsubscribe = this.onListen(handler);
+		this.eventManager.trigger("listen", undefined);
+		return () => {
+			unsubscribe();
+			this._count--;
+			this.eventManager.trigger("unlisten", undefined);
+		};
+	}
+	apply(handler: Handler<T>) {
+		return this.listen(handler);
+	}
+}
+
+export class EmitterGate<T> extends EventEmitter<T> {
+	private listeners: ({fn: (value: T) => void})[] = [];
+	private _isOpen: boolean = true;
+
+	private unsubscribeParent: UnsubscribeFunc | undefined;
+	constructor(private listenParent: ListenFunc<T>) {
+		super(h => this.addLocalListener(h))
+	}
+
+	get isConnected() {
+		return this._isOpen;
+	}
+
+	private activateParent() {
+		this.unsubscribeParent = this.listenParent(value => {
+			this.listeners.forEach(l => l.fn(value));
+		});
+	}
+
+	private deactivateParent() {
+		if (this.unsubscribeParent) {
+			this.unsubscribeParent();
+			this.unsubscribeParent = undefined;
+		}
+	}
+
+	open() {
+		if (this._isOpen) return;
+		this._isOpen = true;
+		if (this.listeners.length > 0) {
+			this.activateParent();
+		}
+	}
+
+	close() {
+		if (!this._isOpen) return;
+		this._isOpen = false;
+		this.deactivateParent();
+	}
+
+	private addLocalListener(fn: Handler<T>) {
+		const unique = {fn};
+		this.listeners.push(unique);
+		if (this.listeners.length === 1 && this._isOpen) {
+			this.activateParent();
+		}
+		return () => {
+			const idx = this.listeners.findIndex(v => v.fn === fn);
+			if (idx === -1) throw new Error("Handler already unsubscribed");
+			this.listeners.splice(idx, 1);
+			if (this.listeners.length === 0) {
+				this.deactivateParent();
+			}
+		};
+	}
 }
 
 export class EventRecorder<T> {
@@ -489,7 +601,7 @@ export class EventRecording<T> {
         
         const { emit, listen } = createEmitListenPair<T>();
         
-        const unsubscribe = animationFrames.listen((frameElapsed) => {
+        const unsubscribe = animationFrames.delta().listen((frameElapsed) => {
             elapsed += frameElapsed * speed;
             
             while (idx < this._entries.length && this._entries[idx][0] <= elapsed) {
@@ -594,6 +706,11 @@ export function createEventsSource<
 	}
 }
 
+/**
+ * Creates a quantum-entangled emit/listen pair; a wormhole between the imperative and reactive dimensions
+ * @param sourceListen 
+ * @returns 
+ */
 export function createEmitListenPair<T>(sourceListen?: () => UnsubscribeFunc | undefined) {
 	const handlers: {fn: (v: T) => void}[] = [];
 	let onRemoveLast: undefined | UnsubscribeFunc;
@@ -750,7 +867,7 @@ export function toEventEmitter<E, N>(source: EmissionSource<E> | EventSource<E, 
 	}
 
     if (eventName !== undefined) {
-        // addEL()
+        // AEL()
         if ("addEventListener" in source) {
 			if ("removeEventListener" in source && typeof source.removeEventListener == "function") {
 				return new EventEmitter(h => {
@@ -801,7 +918,7 @@ function combineArray(emitters: EventEmitter<any>[]) {
 	return new EventEmitter(listen);
 }
 
-function combineRecord(emitters: Record<string | symbol, EventEmitter<any>>) {
+function combineRecord<U extends Dictionary<EventEmitter<any>>>(emitters: U) {
     const keys = Object.keys(emitters);
     let values: Record<string | symbol, (undefined | {value: any})> = {};
     
@@ -819,7 +936,7 @@ function combineRecord(emitters: Record<string | symbol, EventEmitter<any>>) {
         return () => unsubFuncs.forEach(f => f());
     });
     
-    return new EventEmitter(listen);
+    return new EventEmitter(listen) as EventEmitter<any>;
 }
 
 type ExtractEmitterValue<T> = T extends EmissionSource<infer U> ? U : never;

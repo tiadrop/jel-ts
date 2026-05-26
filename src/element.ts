@@ -164,7 +164,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 delete cssVariableUnsubMap[k];
             }
             if (isReactiveSource(v)) {
-                cssVariableUnsubMap[k] = toEventEmitter(v).when(connected$).apply(v => {
+                cssVariableUnsubMap[k] = toEventEmitter(v).gate(connected$).apply(v => {
                     setCSSVariableDirect(k, v);
                 });
                 return;
@@ -188,7 +188,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             if (typeof value == "object" && value) {
                 if (isReactiveSource(value)) {
                     styleUnsubMap[prop] = toEventEmitter(value)
-                        .when(connected$)
+                        .gate(connected$)
                         .apply((v: any) => element.style[prop] = v);
                     return;
                 }
@@ -207,7 +207,9 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                 elementMutationMap.delete(element);
             }
         });
-        const connected$ = new EventEmitter(connected.listen).immediate(undefined).map(() => element.isConnected);
+        const connected$ = new EventEmitter(connected.listen)
+            .immediate(undefined)
+            .map(() => element.isConnected);
 
         const domEntity: DomEntity<any> = {
             [entityDataSymbol]: {
@@ -269,7 +271,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
                     contentUnsub = undefined;
                 }
                 if (isReactiveSource(v)) {
-                    contentUnsub = toEventEmitter(v).when(connected$).apply(v => {
+                    contentUnsub = toEventEmitter(v).gate(connected$).apply(v => {
                         element.innerHTML = "";
                         recursiveAppend(element, v);
                     })
@@ -340,7 +342,7 @@ function getWrappedElement<T extends HTMLElement>(element: T): DomEntity<T> {
             classes: new ClassAccessor(
                 element.classList,
                 (className, stream) => {
-                    toEventEmitter(stream).when(connected$).apply(v => element.classList.toggle(className, v));
+                    toEventEmitter(stream).gate(connected$).apply(v => element.classList.toggle(className, v));
                 },
                 (classNames) => {
                     classNames.forEach(c => {
