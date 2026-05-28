@@ -1,5 +1,6 @@
-import { SetGetStyleFunc, CSSProperty, EventSource, EventEmitterMap, Handler, EventHandlerMap } from "./types";
-import { toEventEmitter } from "./emitter"
+import { EventSource, EventEmitterMap, Handler, EventHandlerMap } from "./emitters/types.js";
+import { CSSProperty, SetGetStyleFunc } from "./types.js";
+import { toEventEmitter } from "./emitters";
 
 export const styleProxy: ProxyHandler<SetGetStyleFunc> = {
     get(style, prop: CSSProperty){

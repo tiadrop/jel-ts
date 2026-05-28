@@ -1,6 +1,8 @@
-import { createEventSource, createEventsSource, createEmitListenPair, toEventEmitter, EventEmitter } from "./emitter.js";
-import { attribsProxy, createEventsProxy, styleProxy } from "./proxy";
-import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, HTMLTag, EmitterLike, SetGetStyleFunc, StyleAccessor, StylesDescriptor, UnsubscribeFunc } from "./types";
+import { EmitterLike, EventEmitter, toEventEmitter } from "./emitters";
+import { UnsubscribeFunc } from "./emitters/types";
+import { createEmitListenPair } from "./emitters/util.js";
+import { attribsProxy, createEventsProxy, styleProxy } from "./proxy.js";
+import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, HTMLTag, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types.js";
 import { entityDataSymbol, isContent, isJelEntity, isReactiveSource } from "./util.js";
 
 const elementWrapCache = new WeakMap<HTMLElement, DomEntity<any>>();

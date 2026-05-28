@@ -1,22 +1,14 @@
-import { ClassAccessor } from "./element";
-import { EventEmitter } from "./emitter";
-import { entityDataSymbol } from "./util";
+import { ClassAccessor } from "./element.js";
+import { EventEmitterMap, EventEmitter, EmitterLike } from "./emitters";
+import { UnsubscribeFunc } from "./emitters/types.js";
+import { entityDataSymbol } from "./util.js";
+
 
 export type ElementClassDescriptor = string | Record<string, boolean | EmitterLike<boolean> | undefined> | undefined | ElementClassDescriptor[];
 export type DOMContent = number | null | string | Element | JelEntity<object> | Text | DOMContent[];
 export type DomEntity<T extends HTMLElement> = JelEntity<ElementAPI<T>>;
 
 export type HTMLTag = keyof HTMLElementTagNameMap;
-
-export type ListenFunc<T> = (handler: Handler<T>) => UnsubscribeFunc;
-export type UnsubscribeFunc = () => void;
-
-export type EmitterLike<T> = {
-    subscribe: ListenFunc<T>;
-} | {
-    listen: ListenFunc<T>;
-}
-export type EmissionSource<T> = EmitterLike<T> | ListenFunc<T> | Promise<T>;
 
 export type CSSValue = string | number | null | HexCodeContainer;
 export type CSSProperty = keyof StylesDescriptor;
@@ -214,31 +206,11 @@ export type JelEntity<API extends object | void> = (API extends void ? {} : API)
     readonly [entityDataSymbol]: JelEntityData;
 };
 
-export type Handler<T> = (value: T) => void;
 export type Period = {
 	asMilliseconds: number;
 } | {
 	asSeconds: number;
 }
 
-export type EventSource<E, N> = {
-    on: (eventName: N, handler: Handler<E>) => UnsubscribeFunc;
-} | {
-    on: (eventName: N, handler: Handler<E>) => void | UnsubscribeFunc;
-    off: (eventName: N, handler: Handler<E>) => void;
-} | {
-    addEventListener: (eventName: N, handler: Handler<E>) => UnsubscribeFunc;
-} | {
-    addEventListener: (eventName: N, handler: Handler<E>) => void;
-    removeEventListener: (eventName: N, handler: Handler<E>) => void;
-};
 
 export type Dictionary<T> = Record<string | symbol, T>;
-
-export type EventEmitterMap<Map> = {
-    [K in keyof Map]: EventEmitter<Map[K]>;
-};
-
-export type EventHandlerMap<Map> = {
-    [K in keyof Map]?: (value: Map[K]) => void;
-};

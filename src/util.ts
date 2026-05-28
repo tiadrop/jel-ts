@@ -1,4 +1,5 @@
-import { DOMContent, ElementDescriptor, EmitterLike, HTMLTag, JelEntity } from "./types";
+import { EmitterLike } from "./emitters";
+import { DOMContent, ElementDescriptor, HTMLTag, JelEntity, Period } from "./types.js";
 
 export const entityDataSymbol = Symbol("jelComponentData");
 
@@ -47,3 +48,9 @@ export function isReactiveSource(value: any): value is EmitterLike<any> {
         || ("subscribe" in value && typeof value.subscribe == "function")
     );
 }
+
+export function toMilliseconds(t: number | Period) {
+	if (typeof t == "number") return t;
+	return "asMilliseconds" in t ? t.asMilliseconds : (t.asSeconds * 1000);
+}
+
