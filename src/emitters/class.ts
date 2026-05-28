@@ -481,7 +481,7 @@ export class EmitterGate<T> extends EventEmitter<T> {
 		this.emit = emit;
     }
 
-    get isConnected() {
+    get isOpen() {
         return !!this.unsubscribeParent;
     }
 
