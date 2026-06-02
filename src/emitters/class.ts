@@ -7,14 +7,13 @@ export class EventEmitter<T> {
 	constructor(protected onListen: ListenFunc<T>) {}
 
 	protected transform<R = T>(
-		handler: (value: T, emit: (value: R) => void) => void
+		transformer: (value: T, emit: (value: R) => void) => void
 	) {
-		const {emit, listen} = createEmitListenPair<R>(
-			() => this.onListen(value => {
-				handler(value, emit);
-			}),
-		);
-		return listen;
+		return (downstreamHandler: Handler<R>) => {
+			return this.listen(value => {
+				transformer(value, downstreamHandler);
+			})
+		};
 	}
 
 	/**
@@ -83,7 +82,7 @@ export class EventEmitter<T> {
 	}
 
 	/**
-	 * Creates a chainable emitter that applies arbitrary transformation to values emitted by its parent
+	 * Creates a chainable emitter that applies a transformation to values emitted by its parent
 	 * @param mapFunc 
 	 * @returns Listenable: emits transformed values
 	 */
@@ -117,7 +116,7 @@ export class EventEmitter<T> {
 		return new EventEmitter<T>(listen);
 	}
 	/**
-	 * Creates a chainable emitter that discards emitted values that are the same as the last value emitted by the new emitter
+	 * Creates a chainable emitter that discards emitted values that are the same as the last emitted value
 	 * @param compare Optional function that takes the previous and next values and returns **true** if they should be considered equal
 	 * 
 	 * If no `compare` function is provided, values will be compared via `===`
