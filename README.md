@@ -53,7 +53,7 @@ body.append([
 Content can be string, Text, HTMLElement, JelEntity or arbitrarily nested array of content. Typing as DOMContent carries that flexibility to your own interfaces.
 
 ```ts
-function showDialogue(content: DOMContent) => {
+function showDialogue(content: DOMContent) {
     const element = $.div({
         classes: "dialogue",
         content: [
@@ -163,7 +163,7 @@ const virtualCursor = $.div({
 
 virtualCursor.classes.toggle(
     "near-left",
-    mousePosition$.map(v => v.x < 100>)
+    mousePosition$.map(v => v.x < 100)
 );
 
 h1.content = websocket$
