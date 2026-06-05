@@ -1,6 +1,7 @@
 import { EmitterLike, EventEmitter, toEventEmitter } from "./emitters";
 import { UnsubscribeFunc } from "./emitters/types";
 import { createEmitListenPair } from "./emitters/util.js";
+import { windowEvents } from "./helpers";
 import { attribsProxy, createEventsProxy, styleProxy } from "./proxy.js";
 import { CSSProperty, CSSValue, DOMContent, DomEntity, DomHelper, ElementClassDescriptor, ElementDescriptor, HTMLTag, SetGetStyleFunc, StyleAccessor, StylesDescriptor } from "./types.js";
 import { entityDataSymbol, isContent, isJelEntity, isReactiveSource } from "./util.js";
@@ -145,6 +146,19 @@ function observeMutations() {
             mut.removedNodes.forEach(node => recursiveRemove(node));
         })  
     });
+
+    const start = () => {
+        mutationObserver!.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    };
+
+    if (typeof document !== "undefined") {
+        if (document.body) {
+            start();
+        } else {
+            window.addEventListener("DOMContentLoaded", start, { once: true });
+        }
+    }
+
     mutationObserver.observe(document.body, {
         childList: true,
         subtree: true
